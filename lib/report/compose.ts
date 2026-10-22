@@ -260,11 +260,22 @@ export async function composeReport(input: {
 }): Promise<Report> {
   const notes = [...input.notes];
 
-  // 문장이 하나도 없으면 모델을 부를 필요가 없다. 모든 항목이 "공개 자료 없음"이 된다.
-  let assignment = input.pieces.map(() => 0);
-  if (input.pieces.length > 0) {
+  // 공개 통계 문장처럼 하위 항목이 이미 정해진 문장은 그대로 두고(범위를 벗어난 번호는 0번으로), 나머지만 AI가 배정한다.
+  // 배정할 문장이 하나도 없으면 모델을 부를 필요가 없다.
+  const assignment = input.pieces.map((piece) => {
+    const count = SECTION_OUTLINE[piece.topic - 1].subsections.length;
+    return piece.subsection !== undefined && piece.subsection < count ? piece.subsection : 0;
+  });
+  const needAi = input.pieces.flatMap((piece, index) => (piece.subsection === undefined ? [index] : []));
+  if (needAi.length > 0) {
     try {
-      assignment = await assignSubsections(input.pieces, input.signal);
+      const assigned = await assignSubsections(
+        needAi.map((index) => input.pieces[index]),
+        input.signal,
+      );
+      needAi.forEach((index, order) => {
+        assignment[index] = assigned[order];
+      });
     } catch {
       // 배정에 실패해도 보고서는 만든다. 문장을 항목별 첫 하위 항목에 모으고 담당자에게 알린다.
       if (input.signal?.aborted) throw new Error("요청이 취소되었습니다");
