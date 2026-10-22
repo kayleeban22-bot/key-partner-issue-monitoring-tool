@@ -1,7 +1,11 @@
-// Design Ref: §2.3 — 보고서 제목, 6개 항목 본문(문장 끝 출처 번호), 출처 목록을 위에서 아래로 보여 준다.
-// 보기만 하는 부분이다. 수정(작업 12), 빈 항목 안내(작업 11), 내려받기(작업 13·14)는 이어서 붙인다.
+// Design Ref: §2.3 — 보고서 제목, 담당자 안내(빈 항목·확인할 점), 6개 항목 본문(문장 끝 출처 번호), 출처 목록을 위에서 아래로 보여 준다.
+// 수정(작업 12)과 내려받기(작업 13·14)는 이어서 붙인다.
 import { EMPTY_SECTION_TEXT } from "@/lib/report/outline";
 import type { Report, Section, Source } from "@/lib/report/types";
+
+// 안내 상자의 공통 모양. 담당자에게만 보이고, 내려받는 보고서 파일에는 들어가지 않는다.
+const NOTICE_BOX =
+  "flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100";
 
 // 본문 문장 끝의 [1] 같은 번호. 누르면 아래 출처 목록의 해당 줄로 이동한다.
 function Citations({ ids }: { ids: number[] }) {
@@ -94,6 +98,43 @@ function SourceList({ sources }: { sources: Source[] }) {
   );
 }
 
+// Plan SC: S5 — 자료가 없어 "공개 자료 없음"이 된 항목을 담당자에게 따로 알린다.
+function EmptySectionsNotice({ report }: { report: Report }) {
+  if (report.emptySectionNos.length === 0) return null;
+  const titles = new Map(report.sections.map((section) => [section.no, section.title]));
+
+  return (
+    <aside aria-label="자료가 없는 항목 안내" className={NOTICE_BOX}>
+      <p className="font-semibold">자료가 없는 항목 {report.emptySectionNos.length}개</p>
+      <ul className="flex flex-col gap-1">
+        {report.emptySectionNos.map((no) => (
+          <li key={no}>
+            <a href={`#section-${no}`} className="underline underline-offset-2 hover:no-underline">
+              {no}. {titles.get(no)}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p>{`이 항목은 보고서에 "${EMPTY_SECTION_TEXT}"으로 표시됩니다. 필요하면 직접 자료를 보완해 주세요.`}</p>
+    </aside>
+  );
+}
+
+// 서버가 남긴 경고(분량, 뺀 문장, AI 사용 불가 등). 담당자가 알아야 할 점만 모아 보여 준다.
+function WarningsNotice({ warnings }: { warnings: string[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <aside aria-label="확인할 점" className={NOTICE_BOX}>
+      <p className="font-semibold">확인할 점</p>
+      <ul className="flex list-disc flex-col gap-1 pl-5">
+        {warnings.map((warning, index) => (
+          <li key={index}>{warning}</li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
 export default function ReportView({ report }: { report: Report }) {
   return (
     <article
@@ -101,6 +142,8 @@ export default function ReportView({ report }: { report: Report }) {
       className="flex flex-col gap-8 rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-900 sm:p-8"
     >
       <h2 className="text-2xl font-bold tracking-tight">{report.title}</h2>
+      <EmptySectionsNotice report={report} />
+      <WarningsNotice warnings={report.warnings} />
       {report.sections.map((section) => (
         <SectionView key={section.no} section={section} />
       ))}
