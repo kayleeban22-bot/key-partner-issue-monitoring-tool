@@ -1,0 +1,63 @@
+// Design Ref: §3.4 — 브라우저에서 /api/report를 부르고, 흘러오는 진행 조각을 읽는다.
+// 서버 전용 코드(config 등)를 가져오지 않고, 타입만 가져온다.
+import type { ProgressStep, Report, StreamChunk } from "./types";
+
+// 화면에 그대로 보여 줘도 되는 쉬운 문구를 message에 담는다.
+export class ReportRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ReportRequestError";
+  }
+}
+
+type Options = {
+  onProgress: (step: ProgressStep) => void;
+  signal?: AbortSignal;
+};
+
+export async function requestReport(country: string, options: Options): Promise<Report> {
+  const response = await fetch("/api/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ country }),
+    signal: options.signal,
+  });
+
+  if (!response.ok || !response.body) {
+    // 서버가 입력을 거절하면 { message }를 돌려준다.
+    let message = "보고서를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    try {
+      const data = (await response.json()) as { message?: string };
+      if (data.message) message = data.message;
+    } catch {
+      // 본문이 JSON이 아니면 기본 문구를 쓴다.
+    }
+    throw new ReportRequestError(message);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // 줄 단위로 잘라 한 조각씩 처리한다.
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      newline = buffer.indexOf("\n");
+      if (!line) continue;
+
+      const chunk = JSON.parse(line) as StreamChunk;
+      if (chunk.type === "progress") options.onProgress(chunk.step);
+      else if (chunk.type === "error") throw new ReportRequestError(chunk.message);
+      else return chunk.report;
+    }
+  }
+
+  throw new ReportRequestError("응답이 중간에 끊겼습니다. 다시 시도해 주세요.");
+}

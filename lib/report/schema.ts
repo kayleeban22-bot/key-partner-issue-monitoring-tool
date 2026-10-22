@@ -164,6 +164,19 @@ export const reportSchema = z
     });
   });
 
+// Design Ref: §3.2 ① — 서버가 받는 입력. 국가명 한 줄만 받고, 길이와 문자를 제한한다.
+export const MAX_COUNTRY_LENGTH = 50;
+
+export const countryInputSchema = z.object({
+  country: z
+    .string({ error: "국가명을 입력해 주세요" })
+    .trim()
+    .min(1, "국가명을 입력해 주세요")
+    .max(MAX_COUNTRY_LENGTH, `국가명은 ${MAX_COUNTRY_LENGTH}자 이하로 입력해 주세요`)
+    // 글자·숫자·공백과 . ' ’ ( ) · , - 만 허용한다. 줄바꿈이나 특수 기호는 막는다.
+    .regex(/^[\p{L}\p{M}\p{N} .'’()·,-]+$/u, "국가명에 사용할 수 없는 문자가 있습니다"),
+});
+
 // /api/report가 진행 중에 흘려 보내는 조각
 export const progressStepSchema = z.enum(["search", "summarize", "compose", "verify"]);
 
