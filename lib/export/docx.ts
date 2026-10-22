@@ -1,6 +1,6 @@
 // Design Ref: §3.2 ⑦ — 보고서를 워드(.docx) 파일로 만든다. docx 라이브러리가 파일 구조를 만든다.
 // 내용: 제목, 6개 항목 본문(문장 끝 출처 번호), 출처 목록. 경고와 빈 항목 안내는 담당자용이라 파일에 넣지 않는다. (Design §3.3)
-// 양식(PRD 5번): A4, 본문 11pt, 여백 보통(2.54cm). 줄 간격은 160%로 두었다(layout.ts의 쪽수 추정과 같은 가정).
+// 양식(PRD 5번): A4, 본문 11pt, 여백 보통(2.54cm). 줄 간격은 약 160%에 해당하는 18pt 고정이다(layout.ts의 쪽수 추정은 이 서식을 실제로 측정해 맞췄다).
 // 서버 전용 코드이다.
 import "server-only";
 import {
@@ -22,7 +22,12 @@ import { cleanText } from "./shared";
 const FONT = { ascii: "맑은 고딕", hAnsi: "맑은 고딕", eastAsia: "맑은 고딕", cs: "맑은 고딕" };
 const HALF_POINTS = (pt: number) => pt * 2; // 워드의 글자 크기는 반 포인트 단위이다.
 const BODY_PT = 11;
-const LINE_160 = 384; // 줄 간격 160% (240이 100%)
+// 줄 간격은 글꼴 종류와 상관없이 쪽수가 같게 나오도록 "정확히 N포인트"로 정한다. (배수로 정하면 글꼴마다 쪽수가 달라진다)
+// 본문 11pt × 약 160% ≈ 18pt, 단위는 1/20포인트(twip).
+const pt = (points: number) => points * 20;
+const BODY_LINE = pt(18);
+const SOURCE_PT = 9;
+const SOURCE_LINE = pt(12);
 const MARGIN = convertMillimetersToTwip(25.4); // 여백 "보통" 2.54cm
 
 function bodyParagraph(children: (TextRun | ExternalHyperlink)[], options: { before?: number; after?: number } = {}) {
@@ -77,15 +82,16 @@ export async function buildDocx(report: Report): Promise<Buffer> {
     const old = source.isOld ? " (과거 자료)" : "";
     children.push(
       new Paragraph({
-        spacing: { before: 0, after: 60 },
+        // 출처 목록은 글자를 줄이고 줄 간격을 좁혀 쪽수를 아낀다. (본문만 160%)
+        spacing: { before: 0, after: 40, line: SOURCE_LINE, lineRule: LineRuleType.EXACT },
         children: [
           new TextRun({
             text: `[${source.id}] ${cleanText(source.org)}, ${cleanText(source.title)}, ${source.date}${old}, `,
-            size: HALF_POINTS(10),
+            size: HALF_POINTS(SOURCE_PT),
           }),
           new ExternalHyperlink({
             link: source.url,
-            children: [new TextRun({ text: source.url, size: HALF_POINTS(10), color: "0563C1", underline: {} })],
+            children: [new TextRun({ text: source.url, size: HALF_POINTS(SOURCE_PT), color: "0563C1", underline: {} })],
           }),
         ],
       }),
@@ -98,7 +104,7 @@ export async function buildDocx(report: Report): Promise<Buffer> {
       default: {
         document: {
           run: { font: FONT, size: HALF_POINTS(BODY_PT) },
-          paragraph: { spacing: { line: LINE_160, lineRule: LineRuleType.AUTO } },
+          paragraph: { spacing: { line: BODY_LINE, lineRule: LineRuleType.EXACT } },
         },
       },
       paragraphStyles: [
@@ -109,7 +115,7 @@ export async function buildDocx(report: Report): Promise<Buffer> {
           next: "Normal",
           quickFormat: true,
           run: { font: FONT, size: HALF_POINTS(18), bold: true, color: "000000" },
-          paragraph: { spacing: { before: 0, after: 240, line: LINE_160, lineRule: LineRuleType.AUTO } },
+          paragraph: { spacing: { before: 0, after: 240, line: pt(28), lineRule: LineRuleType.EXACT } },
         },
         {
           id: "Heading1",
@@ -118,7 +124,7 @@ export async function buildDocx(report: Report): Promise<Buffer> {
           next: "Normal",
           quickFormat: true,
           run: { font: FONT, size: HALF_POINTS(13), bold: true, color: "000000" },
-          paragraph: { spacing: { before: 240, after: 120, line: LINE_160, lineRule: LineRuleType.AUTO }, keepNext: true },
+          paragraph: { spacing: { before: 240, after: 120, line: pt(22), lineRule: LineRuleType.EXACT }, keepNext: true },
         },
         {
           id: "Heading2",
@@ -127,7 +133,7 @@ export async function buildDocx(report: Report): Promise<Buffer> {
           next: "Normal",
           quickFormat: true,
           run: { font: FONT, size: HALF_POINTS(BODY_PT), bold: true, color: "000000" },
-          paragraph: { spacing: { before: 120, after: 60, line: LINE_160, lineRule: LineRuleType.AUTO }, keepNext: true },
+          paragraph: { spacing: { before: 120, after: 60, line: BODY_LINE, lineRule: LineRuleType.EXACT }, keepNext: true },
         },
       ],
     },
