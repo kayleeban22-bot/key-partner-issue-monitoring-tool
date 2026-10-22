@@ -1,5 +1,11 @@
+"use client";
+
 // Design Ref: §2.3 — 보고서 제목, 담당자 안내(빈 항목·확인할 점), 6개 항목 본문(문장 끝 출처 번호), 출처 목록을 위에서 아래로 보여 준다.
-// 수정(작업 12)과 내려받기(작업 13·14)는 이어서 붙인다.
+// 항목마다 [수정]으로 글을 직접 고칠 수 있다(작업 12). 내려받기(작업 13·14)는 이어서 붙인다.
+import { useState } from "react";
+import SectionEditor from "@/components/SectionEditor";
+import { applySection } from "@/lib/report/edit";
+import { MAX_PAGES, MIN_PAGES, estimatePages } from "@/lib/report/layout";
 import { EMPTY_SECTION_TEXT } from "@/lib/report/outline";
 import type { Report, Section, Source } from "@/lib/report/types";
 
@@ -26,16 +32,35 @@ function Citations({ ids }: { ids: number[] }) {
   );
 }
 
-function SectionView({ section }: { section: Section }) {
+function SectionView({
+  section,
+  onEdit,
+  editDisabled,
+}: {
+  section: Section;
+  onEdit: () => void;
+  editDisabled: boolean;
+}) {
   const headingId = `section-${section.no}`;
   // 하위 항목이 하나뿐이면 항목 제목과 겹치므로 하위 제목은 숨긴다.
   const showSubsectionTitles = section.subsections.length > 1;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h3 id={headingId} className="text-lg font-semibold">
-        {section.no}. {section.title}
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 id={headingId} className="text-lg font-semibold">
+          {section.no}. {section.title}
+        </h3>
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={editDisabled}
+          title={editDisabled ? "다른 항목을 수정하는 중입니다. 저장하거나 취소한 뒤 수정해 주세요." : undefined}
+          className="shrink-0 rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          수정
+        </button>
+      </div>
 
       {section.isEmpty ? (
         <p className="text-zinc-500 dark:text-zinc-400">{EMPTY_SECTION_TEXT}</p>
@@ -135,18 +160,63 @@ function WarningsNotice({ warnings }: { warnings: string[] }) {
   );
 }
 
-export default function ReportView({ report }: { report: Report }) {
+// 지금 보고서의 예상 분량. 고칠 때마다 바뀌어서 목표(A4 2~3쪽)와 비교할 수 있다. 글자 수로 추정한 값이다.
+function PageEstimate({ report }: { report: Report }) {
+  const pages = estimatePages(report);
+  const status =
+    pages < MIN_PAGES ? `목표 ${MIN_PAGES}쪽에 못 미침` : pages > MAX_PAGES ? `목표 ${MAX_PAGES}쪽 초과` : "목표 범위 안";
+  const ok = pages >= MIN_PAGES && pages <= MAX_PAGES;
+  return (
+    <p
+      aria-label="예상 분량"
+      className={`text-sm ${ok ? "text-zinc-600 dark:text-zinc-400" : "text-amber-800 dark:text-amber-300"}`}
+    >
+      예상 분량 약 {pages.toFixed(1)}쪽 ({status}, 글자 수로 추정)
+    </p>
+  );
+}
+
+type Props = {
+  report: Report;
+  // 담당자가 항목을 고쳐 저장하면 새 보고서를 알려 준다. (서버에는 저장하지 않는다)
+  onChange: (report: Report) => void;
+};
+
+export default function ReportView({ report, onChange }: Props) {
+  // 한 번에 한 항목만 고친다. 저장할 때 출처 번호를 다시 매기기 때문에, 동시에 고치면 번호가 어긋난다.
+  const [editingNo, setEditingNo] = useState<Section["no"] | null>(null);
+
   return (
     <article
       aria-label="생성된 보고서"
       className="flex flex-col gap-8 rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-900 sm:p-8"
     >
-      <h2 className="text-2xl font-bold tracking-tight">{report.title}</h2>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-2xl font-bold tracking-tight">{report.title}</h2>
+        <PageEstimate report={report} />
+      </div>
       <EmptySectionsNotice report={report} />
       <WarningsNotice warnings={report.warnings} />
-      {report.sections.map((section) => (
-        <SectionView key={section.no} section={section} />
-      ))}
+      {report.sections.map((section) =>
+        editingNo === section.no ? (
+          <SectionEditor
+            key={section.no}
+            section={section}
+            onSave={(saved) => {
+              onChange(applySection(report, saved));
+              setEditingNo(null);
+            }}
+            onCancel={() => setEditingNo(null)}
+          />
+        ) : (
+          <SectionView
+            key={section.no}
+            section={section}
+            onEdit={() => setEditingNo(section.no)}
+            editDisabled={editingNo !== null}
+          />
+        ),
+      )}
       <hr className="border-black/10 dark:border-white/15" />
       <SourceList sources={report.sources} />
     </article>
