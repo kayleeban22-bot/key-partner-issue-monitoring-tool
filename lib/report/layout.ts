@@ -3,8 +3,9 @@
 import { EMPTY_SECTION_TEXT } from "./outline";
 import type { Report } from "./types";
 
-// 한글 11pt, 여백 보통, 줄 간격 160% 기준으로 A4 한 쪽에 들어가는 글자 수의 대략값이다. (측정한 값이 아니라 추정치)
-export const CHARS_PER_PAGE = 1800;
+// 워드 파일(본문 11pt, 여백 2.54cm, 줄 간격 18pt 고정, 출처 목록 9pt)을 실제로 열어 쪽수를 재서 맞춘 값이다. (작업 16)
+// 이 계산법으로 센 글자 수가 약 4,200자일 때 3쪽이 가득 찬다(베트남·부탄 보고서에 글자를 더해 가며 측정).
+export const CHARS_PER_PAGE = 1400;
 
 // PRD 5번: 제목과 출처 목록을 포함해 A4 2쪽 이상 3쪽 이하
 export const MIN_PAGES = 2;
