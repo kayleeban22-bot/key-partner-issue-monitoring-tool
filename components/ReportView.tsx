@@ -1,8 +1,9 @@
 "use client";
 
 // Design Ref: §2.3 — 보고서 제목, 담당자 안내(빈 항목·확인할 점), 6개 항목 본문(문장 끝 출처 번호), 출처 목록을 위에서 아래로 보여 준다.
-// 항목마다 [수정]으로 글을 직접 고칠 수 있다(작업 12). 내려받기(작업 13·14)는 이어서 붙인다.
+// 항목마다 [수정]으로 글을 직접 고칠 수 있고(작업 12), 맨 아래에서 워드 파일로 내려받는다(작업 14). 한글 파일은 작업 13에서 따로 이어간다.
 import { useState } from "react";
+import DownloadPanel from "@/components/DownloadPanel";
 import SectionEditor from "@/components/SectionEditor";
 import { applySection } from "@/lib/report/edit";
 import { MAX_PAGES, MIN_PAGES, estimatePages } from "@/lib/report/layout";
@@ -219,6 +220,7 @@ export default function ReportView({ report, onChange }: Props) {
       )}
       <hr className="border-black/10 dark:border-white/15" />
       <SourceList sources={report.sources} />
+      <DownloadPanel report={report} />
     </article>
   );
 }
