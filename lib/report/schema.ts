@@ -11,6 +11,9 @@ const publishedDateSchema = z
   .string()
   .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, "발행일은 YYYY, YYYY-MM, YYYY-MM-DD 중 하나여야 합니다");
 
+// 표준 목차 항목 번호(1~6)
+export const sectionNoSchema = z.literal([1, 2, 3, 4, 5, 6]);
+
 export const sourceSchema = z.object({
   id: z.number().int().positive(), // 본문의 [1] 번호
   org: z.string().min(1), // 기관명
@@ -23,6 +26,7 @@ export const sourceSchema = z.object({
 // 서버 안에서만 쓴다. 숫자를 원문과 대조하려고 발췌를 함께 들고 있고, 브라우저로는 보내지 않는다.
 export const rawSourceSchema = sourceSchema.extend({
   excerpt: z.string(),
+  topic: sectionNoSchema, // 이 자료가 쓰일 표준 목차 항목 번호
 });
 
 export const sentenceSchema = z.object({
@@ -37,7 +41,6 @@ export const subsectionSchema = z.object({
   sentences: z.array(sentenceSchema),
 });
 
-export const sectionNoSchema = z.literal([1, 2, 3, 4, 5, 6]);
 
 export const sectionSchema = z.object({
   no: sectionNoSchema,
