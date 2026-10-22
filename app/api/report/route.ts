@@ -1,10 +1,12 @@
 // Design Ref: §3.4 — 보고서 생성 API. 진행 상황을 한 줄씩(JSON) 흘려 보내고 마지막에 보고서를 보낸다.
-// 지금은 검색·요약·작성 대신 가짜 보고서를 돌려주는 뼈대이다(작업 4). 실제 처리는 작업 6~9에서 채운다.
+// 자료 검색(작업 6)은 실제로 동작하고, 요약·작성·검증 단계는 아직 가짜 보고서이다(작업 7~9에서 채운다).
+import { ConfigError } from "@/lib/config";
 import { buildFakeReport } from "@/lib/report/fake";
 import { countryInputSchema, reportSchema } from "@/lib/report/schema";
-import type { ProgressStep, StreamChunk } from "@/lib/report/types";
+import { SearchError, searchSources } from "@/lib/report/search";
+import type { ProgressStep, Source, StreamChunk } from "@/lib/report/types";
 
-// 최대 실행 시간(초). 실제 처리를 붙인 뒤 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
+// 최대 실행 시간(초). 검색 호출은 각각 40초 안에 끝나도록 했다. 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
 export const maxDuration = 60;
 
 const encoder = new TextEncoder();
@@ -18,7 +20,10 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const STEPS: ProgressStep[] = ["search", "summarize", "compose", "verify"];
+// 검색 다음 단계들. 아직 가짜라서 단계가 바뀌는 모습만 보이게 잠깐 쉰다.
+const LATER_STEPS: ProgressStep[] = ["summarize", "compose", "verify"];
+
+const GENERIC_ERROR = "보고서를 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -41,24 +46,37 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for (const step of STEPS) {
+        // ② 자료 검색 (실제)
+        controller.enqueue(toLine({ type: "progress", step: "search" }));
+        const result = await searchSources(country, { signal: request.signal });
+        // 화면으로 보내는 출처에는 서버 안에서만 쓰는 발췌(excerpt)와 주제(topic)를 뺀다.
+        const sources: Source[] = result.sources.map(
+          ({ id, org, title, date, url, isOld }) => ({ id, org, title, date, url, isOld }),
+        );
+
+        // ③~⑥ 요약·작성·검증 (아직 가짜)
+        for (const step of LATER_STEPS) {
           if (request.signal.aborted) return; // 화면이 닫히면 중단한다
           controller.enqueue(toLine({ type: "progress", step }));
-          await sleep(400); // 임시: 단계가 바뀌는 모습을 볼 수 있게 잠깐 쉰다
+          await sleep(400);
         }
-        const report = reportSchema.parse(buildFakeReport(country));
+        const report = reportSchema.parse(buildFakeReport(country, sources));
         controller.enqueue(toLine({ type: "done", report }));
       } catch (error) {
-        // 내부 정보는 화면에 보내지 않고, 서버 기록에만 남긴다.
-        console.error("보고서 생성 중 오류", error instanceof Error ? error.name : "unknown");
+        if (request.signal.aborted) return;
+        // 내부 정보(키, 응답 내용)는 서버 기록에도 남기지 않고, 오류 종류와 메시지만 남긴다.
+        // ConfigError·SearchError의 메시지에는 변수 이름과 HTTP 번호만 들어 있다.
+        const known = error instanceof ConfigError || error instanceof SearchError;
+        console.error("보고서 생성 중 오류:", known ? error.message : (error as Error)?.name);
         controller.enqueue(
-          toLine({
-            type: "error",
-            message: "보고서를 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.",
-          }),
+          toLine({ type: "error", message: known ? error.userMessage : GENERIC_ERROR }),
         );
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // 화면이 이미 닫아서 스트림이 끝나 있는 경우
+        }
       }
     },
   });
