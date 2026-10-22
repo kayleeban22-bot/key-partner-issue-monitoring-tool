@@ -3,22 +3,11 @@
 //   - "초안" 같은 금지 문구가 없는지                                                       — PRD 5번 must 2
 //   - A4 2쪽 이상 3쪽 이하인지 (글자 수로 추정)                                             — Plan SC: S3
 import { MAX_PAGES, MIN_PAGES, estimatePages } from "./layout";
+import { findForbiddenPhrases } from "./phrases";
 import { reportSchema } from "./schema";
 import type { Report } from "./types";
 
-// 보고서 자체를 "초안/예시"처럼 보이게 하는 표현. 상급자에게 바로 올릴 문서이므로 들어가면 안 된다.
-export const FORBIDDEN_PHRASES = ["초안", "(예시)", "예시 보고서", "샘플", "임시본"];
-
-// 제목과 본문에서 금지 문구를 찾는다. (경고 문구는 파일에 들어가지 않으므로 검사하지 않는다)
-export function findForbiddenPhrases(report: Report): string[] {
-  const texts = [
-    report.title,
-    ...report.sections.flatMap((section) =>
-      section.subsections.flatMap((sub) => sub.sentences.map((sentence) => sentence.text)),
-    ),
-  ];
-  return FORBIDDEN_PHRASES.filter((phrase) => texts.some((text) => text.includes(phrase)));
-}
+export { FORBIDDEN_PHRASES, findForbiddenPhrases } from "./phrases";
 
 // 규칙에 맞지 않으면 오류를 던지고(호출한 쪽이 쉬운 문구로 바꿔 보낸다), 맞으면 경고를 더한 보고서를 돌려준다.
 export function verifyReport(report: Report): Report {

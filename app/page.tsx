@@ -1,7 +1,7 @@
 "use client";
 
 // Design Ref: §2 — 화면은 이 한 장이고, 입력 → 생성 중 → 결과 순으로 바뀐다.
-// 입력, 생성 중 표시, 결과 보기까지 연결돼 있다. 수정은 작업 12, 로딩·실패 다듬기는 작업 15에서 이어 붙인다.
+// 입력, 생성 중 표시, 결과 보기와 수정(작업 12)까지 연결돼 있다. 로딩·실패 다듬기는 작업 15에서 이어 붙인다.
 import { useEffect, useRef, useState } from "react";
 import CountryForm from "@/components/CountryForm";
 import ReportView from "@/components/ReportView";
@@ -99,7 +99,9 @@ export default function Home() {
           </p>
         )}
 
-        {view.kind === "done" && <ReportView report={view.report} />}
+        {view.kind === "done" && (
+          <ReportView report={view.report} onChange={(report) => setView({ kind: "done", report })} />
+        )}
       </main>
     </div>
   );

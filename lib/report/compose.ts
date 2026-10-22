@@ -7,6 +7,7 @@ import { z } from "zod";
 import { callOpenAI } from "./openai";
 import { MAX_PAGES, estimatePages } from "./layout";
 import { EMPTY_SECTION_TEXT, SECTION_OUTLINE } from "./outline";
+import { compactSources } from "./sources";
 import type { RawSource, Report, Section, SummaryPiece } from "./types";
 
 // 배치는 짧은 분류 작업이라 값이 싼 모델로 충분하다.
@@ -115,47 +116,6 @@ async function assignSubsections(
 // ---------- 보고서 만들기 (순수 함수) ----------
 
 type IndexedPiece = SummaryPiece & { index: number };
-
-// 쓰인 출처만 남기고, 본문에 처음 나오는 순서대로 1번부터 다시 매긴다. (안 쓴 출처가 쪽수만 차지하지 않게)
-function compactSources(
-  sections: Section[],
-  sources: RawSource[],
-): { sections: Section[]; sources: Report["sources"] } {
-  const order: number[] = [];
-  for (const section of sections) {
-    for (const sub of section.subsections) {
-      for (const sentence of sub.sentences) {
-        for (const id of sentence.sourceIds) if (!order.includes(id)) order.push(id);
-      }
-    }
-  }
-  const newId = new Map(order.map((oldId, index) => [oldId, index + 1]));
-  const byId = new Map(sources.map((source) => [source.id, source]));
-
-  return {
-    sections: sections.map((section) => ({
-      ...section,
-      subsections: section.subsections.map((sub) => ({
-        ...sub,
-        sentences: sub.sentences.map((sentence) => ({
-          ...sentence,
-          sourceIds: sentence.sourceIds.map((id) => newId.get(id) as number),
-        })),
-      })),
-    })),
-    sources: order.map((oldId) => {
-      const source = byId.get(oldId) as RawSource;
-      return {
-        id: newId.get(oldId) as number,
-        org: source.org,
-        title: source.title,
-        date: source.date,
-        url: source.url,
-        isOld: source.isOld,
-      };
-    }),
-  };
-}
 
 function buildOnce(args: {
   country: string;
