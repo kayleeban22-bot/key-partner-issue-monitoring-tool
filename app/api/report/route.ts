@@ -1,12 +1,13 @@
 // Design Ref: §3.4 — 보고서 생성 API. 진행 상황을 한 줄씩(JSON) 흘려 보내고 마지막에 보고서를 보낸다.
-// 자료 검색(작업 6)·요약(작업 7)·규칙 검사(작업 8)는 실제로 동작하고, 본문 작성·최종 검증은 아직 가짜이다(작업 9에서 채운다).
+// 검색(작업 6)·요약(작업 7)·규칙 검사(작업 8)·본문 작성과 최종 검사(작업 9)까지 모두 실제로 동작한다.
 import { ConfigError } from "@/lib/config";
-import { buildFakeReport } from "@/lib/report/fake";
+import { composeReport } from "@/lib/report/compose";
 import { applyRules } from "@/lib/report/rules";
-import { countryInputSchema, reportSchema } from "@/lib/report/schema";
+import { countryInputSchema } from "@/lib/report/schema";
 import { SearchError, searchSources } from "@/lib/report/search";
 import { SummarizeError, summarizeSources } from "@/lib/report/summarize";
-import type { ProgressStep, Source, StreamChunk } from "@/lib/report/types";
+import type { StreamChunk } from "@/lib/report/types";
+import { verifyReport } from "@/lib/report/verify";
 
 // 최대 실행 시간(초). 검색 호출은 각각 40초 안에 끝나도록 했다. 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
 export const maxDuration = 60;
@@ -17,13 +18,6 @@ const encoder = new TextEncoder();
 function toLine(chunk: StreamChunk): Uint8Array {
   return encoder.encode(`${JSON.stringify(chunk)}\n`);
 }
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// 요약 다음 단계들. 아직 가짜라서 단계가 바뀌는 모습만 보이게 잠깐 쉰다.
-const LATER_STEPS: ProgressStep[] = ["compose", "verify"];
 
 const GENERIC_ERROR = "보고서를 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.";
 
@@ -51,11 +45,6 @@ export async function POST(request: Request) {
         // ② 자료 검색 (실제)
         controller.enqueue(toLine({ type: "progress", step: "search" }));
         const result = await searchSources(country, { signal: request.signal });
-        // 화면으로 보내는 출처에는 서버 안에서만 쓰는 발췌(excerpt)와 주제(topic)를 뺀다.
-        const sources: Source[] = result.sources.map(
-          ({ id, org, title, date, url, isOld }) => ({ id, org, title, date, url, isOld }),
-        );
-
         // ③ 요약 (실제): 자료마다 한국어 요약 문장을 만들고 출처 번호를 붙인다.
         if (request.signal.aborted) return;
         controller.enqueue(toLine({ type: "progress", step: "summarize" }));
@@ -73,13 +62,20 @@ export async function POST(request: Request) {
           notes.push(`연락처·주소 같은 사적 정보가 있어 문장 ${removed.privateInfo}개를 뺐습니다.`);
         }
 
-        // ⑤~⑥ 작성·검증 (아직 가짜)
-        for (const step of LATER_STEPS) {
-          if (request.signal.aborted) return; // 화면이 닫히면 중단한다
-          controller.enqueue(toLine({ type: "progress", step }));
-          await sleep(400);
-        }
-        const report = reportSchema.parse(buildFakeReport(country, sources, pieces, notes));
+        // ⑤ 본문 작성 (실제): 문장을 표준 목차 6개 항목과 하위 항목에 배치하고 분량을 맞춘다.
+        if (request.signal.aborted) return;
+        controller.enqueue(toLine({ type: "progress", step: "compose" }));
+        const composed = await composeReport({
+          country,
+          sources: result.sources,
+          pieces,
+          notes,
+          signal: request.signal,
+        });
+
+        // ⑥ 최종 검사 (실제): 목차·출처·금지 문구·분량을 확인하고, 담당자가 알아야 할 점을 경고에 더한다.
+        controller.enqueue(toLine({ type: "progress", step: "verify" }));
+        const report = verifyReport(composed);
         controller.enqueue(toLine({ type: "done", report }));
       } catch (error) {
         if (request.signal.aborted) return;
