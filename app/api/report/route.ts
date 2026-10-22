@@ -1,14 +1,18 @@
 // Design Ref: §3.4 — 보고서 생성 API. 진행 상황을 한 줄씩(JSON) 흘려 보내고 마지막에 보고서를 보낸다.
-// 자료 검색(작업 6)·요약(작업 7)·규칙 검사(작업 8)는 실제로 동작하고, 본문 작성·최종 검증은 아직 가짜이다(작업 9에서 채운다).
+// 흐름: 공개 통계(무료, 숫자) + AI 웹 검색(문장형 자료)을 함께 모아 → 요약 → 규칙 검사 → 본문 배치 → 최종 검사.
+// AI를 쓸 수 없을 때(이용 한도 소진 등)에도 공개 통계만으로 보고서를 만든다.
 import { ConfigError } from "@/lib/config";
-import { buildFakeReport } from "@/lib/report/fake";
+import { composeReport } from "@/lib/report/compose";
+import { fetchOpenData } from "@/lib/report/opendata";
+import { OpenAIError } from "@/lib/report/openai";
 import { applyRules } from "@/lib/report/rules";
-import { countryInputSchema, reportSchema } from "@/lib/report/schema";
+import { countryInputSchema } from "@/lib/report/schema";
 import { SearchError, searchSources } from "@/lib/report/search";
 import { SummarizeError, summarizeSources } from "@/lib/report/summarize";
-import type { ProgressStep, Source, StreamChunk } from "@/lib/report/types";
+import type { RawSource, StreamChunk, SummaryPiece } from "@/lib/report/types";
+import { verifyReport } from "@/lib/report/verify";
 
-// 최대 실행 시간(초). 검색 호출은 각각 40초 안에 끝나도록 했다. 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
+// 최대 실행 시간(초). AI 호출은 각각 40초 안에 끝나도록 했다. 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
 export const maxDuration = 60;
 
 const encoder = new TextEncoder();
@@ -18,14 +22,22 @@ function toLine(chunk: StreamChunk): Uint8Array {
   return encoder.encode(`${JSON.stringify(chunk)}\n`);
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// 요약 다음 단계들. 아직 가짜라서 단계가 바뀌는 모습만 보이게 잠깐 쉰다.
-const LATER_STEPS: ProgressStep[] = ["compose", "verify"];
-
 const GENERIC_ERROR = "보고서를 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.";
+
+// 화면에 그대로 보여 줘도 되는 쉬운 문구(userMessage)를 가진 오류들
+type KnownError = ConfigError | SearchError | SummarizeError | OpenAIError;
+const isKnownError = (error: unknown): error is KnownError =>
+  error instanceof ConfigError ||
+  error instanceof SearchError ||
+  error instanceof SummarizeError ||
+  error instanceof OpenAIError;
+
+// 경고 문구에 넣는 짧은 이유. (보고서는 만들어졌으므로 "만들 수 없습니다" 같은 오류 문구는 쓰지 않는다)
+function failureReason(error: KnownError): string {
+  if (error instanceof OpenAIError) return error.kind === "quota" ? "이용 한도 소진" : "AI 서비스 통신 오류";
+  if (error instanceof ConfigError) return "서버 설정 필요";
+  return "AI 처리 오류";
+}
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -48,50 +60,74 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        // ② 자료 검색 (실제)
         controller.enqueue(toLine({ type: "progress", step: "search" }));
-        const result = await searchSources(country, { signal: request.signal });
-        // 화면으로 보내는 출처에는 서버 안에서만 쓰는 발췌(excerpt)와 주제(topic)를 뺀다.
-        const sources: Source[] = result.sources.map(
-          ({ id, org, title, date, url, isOld }) => ({ id, org, title, date, url, isOld }),
-        );
 
-        // ③ 요약 (실제): 자료마다 한국어 요약 문장을 만들고 출처 번호를 붙인다.
-        if (request.signal.aborted) return;
-        controller.enqueue(toLine({ type: "progress", step: "summarize" }));
-        const summary = await summarizeSources(country, result.sources, {
-          signal: request.signal,
-        });
+        // ② 공개 통계 (무료): AI 검색과 동시에 불러온다. 실패해도 오류를 던지지 않고 안내만 돌려준다.
+        const openPromise = fetchOpenData(country, { signal: request.signal });
 
-        // ④ 규칙 검사 (실제): 숫자가 원문과 다르거나 사적 정보가 든 문장은 빼고, 최근 자료를 앞에 둔다.
-        const { pieces, removed } = applyRules(summary.pieces, result.sources);
+        // ② 자료 검색 → ③ 요약 → ④ 규칙 검사 (AI). 여기서 알려진 오류가 나면 공개 통계만으로 계속한다.
+        let aiSources: RawSource[] = [];
+        let aiPieces: SummaryPiece[] = [];
         const notes: string[] = [];
-        if (removed.numberMismatch > 0) {
-          notes.push(`숫자가 원문과 맞지 않아 문장 ${removed.numberMismatch}개를 뺐습니다.`);
-        }
-        if (removed.privateInfo > 0) {
-          notes.push(`연락처·주소 같은 사적 정보가 있어 문장 ${removed.privateInfo}개를 뺐습니다.`);
+        let aiFailure: KnownError | null = null;
+        try {
+          const result = await searchSources(country, { signal: request.signal });
+          if (request.signal.aborted) return;
+          controller.enqueue(toLine({ type: "progress", step: "summarize" }));
+          const summary = await summarizeSources(country, result.sources, { signal: request.signal });
+
+          const { pieces, removed } = applyRules(summary.pieces, result.sources);
+          aiSources = result.sources;
+          aiPieces = pieces;
+          if (removed.numberMismatch > 0) {
+            notes.push(`숫자가 원문과 맞지 않아 문장 ${removed.numberMismatch}개를 뺐습니다.`);
+          }
+          if (removed.privateInfo > 0) {
+            notes.push(`연락처·주소 같은 사적 정보가 있어 문장 ${removed.privateInfo}개를 뺐습니다.`);
+          }
+        } catch (error) {
+          if (request.signal.aborted) return;
+          if (!isKnownError(error)) throw error;
+          aiFailure = error;
         }
 
-        // ⑤~⑥ 작성·검증 (아직 가짜)
-        for (const step of LATER_STEPS) {
-          if (request.signal.aborted) return; // 화면이 닫히면 중단한다
-          controller.enqueue(toLine({ type: "progress", step }));
-          await sleep(400);
+        const open = await openPromise;
+        notes.unshift(...open.notes);
+
+        // 공개 통계도 AI 자료도 없는데 AI가 실패했다면, 그 오류를 그대로 알린다.
+        if (open.pieces.length === 0 && aiPieces.length === 0 && aiFailure) throw aiFailure;
+        if (aiFailure) {
+          console.error("AI 사용 불가, 공개 통계로 계속:", aiFailure.message);
+          notes.push(`AI 자료 검색을 쓸 수 없어(${failureReason(aiFailure)}) 공개 통계 자료만으로 만들었습니다.`);
         }
-        const report = reportSchema.parse(buildFakeReport(country, sources, pieces, notes));
+
+        // 출처 번호를 합친다: 공개 통계 출처가 1번부터, AI 출처는 그 뒤로 이어 붙인다.
+        const offset = open.sources.length;
+        const sources: RawSource[] = [
+          ...open.sources.map((source) => ({ ...source, excerpt: "", topic: 1 as const })),
+          ...aiSources.map((source) => ({ ...source, id: source.id + offset })),
+        ];
+        const pieces: SummaryPiece[] = [
+          ...open.pieces,
+          ...aiPieces.map((piece) => ({ ...piece, sourceId: piece.sourceId + offset })),
+        ];
+
+        // ⑤ 본문 작성: 문장을 표준 목차 6개 항목과 하위 항목에 배치하고 분량을 맞춘다.
+        if (request.signal.aborted) return;
+        controller.enqueue(toLine({ type: "progress", step: "compose" }));
+        const composed = await composeReport({ country, sources, pieces, notes, signal: request.signal });
+
+        // ⑥ 최종 검사: 목차·출처·금지 문구·분량을 확인하고, 담당자가 알아야 할 점을 경고에 더한다.
+        controller.enqueue(toLine({ type: "progress", step: "verify" }));
+        const report = verifyReport(composed);
         controller.enqueue(toLine({ type: "done", report }));
       } catch (error) {
         if (request.signal.aborted) return;
         // 내부 정보(키, 응답 내용)는 서버 기록에도 남기지 않고, 오류 종류와 메시지만 남긴다.
-        // ConfigError·SearchError의 메시지에는 변수 이름과 HTTP 번호만 들어 있다.
-        const known =
-          error instanceof ConfigError ||
-          error instanceof SearchError ||
-          error instanceof SummarizeError;
-        console.error("보고서 생성 중 오류:", known ? error.message : (error as Error)?.name);
+        // ConfigError·SearchError·OpenAIError의 메시지에는 변수 이름과 HTTP 번호만 들어 있다.
+        console.error("보고서 생성 중 오류:", isKnownError(error) ? error.message : (error as Error)?.name);
         controller.enqueue(
-          toLine({ type: "error", message: known ? error.userMessage : GENERIC_ERROR }),
+          toLine({ type: "error", message: isKnownError(error) ? error.userMessage : GENERIC_ERROR }),
         );
       } finally {
         try {

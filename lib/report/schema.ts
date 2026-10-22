@@ -35,6 +35,8 @@ export const summaryPieceSchema = z.object({
   sourceId: z.number().int().positive(), // 근거가 된 출처 번호 (요약마다 출처가 반드시 하나 있다)
   topic: sectionNoSchema, // 쓰일 표준 목차 항목 번호
   text: z.string().min(1),
+  // 둘 곳이 이미 정해진 하위 항목 번호(0부터). 공개 통계 문장처럼 코드가 직접 만든 문장에 쓰고, 없으면 AI가 배정한다.
+  subsection: z.number().int().min(0).optional(),
 });
 
 export const sentenceSchema = z.object({
