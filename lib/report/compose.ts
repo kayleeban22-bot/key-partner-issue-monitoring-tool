@@ -4,7 +4,7 @@
 // 서버 전용 코드이다. 키는 config.ts에서만 읽는다.
 import "server-only";
 import { z } from "zod";
-import { getOpenAIApiKey } from "../config";
+import { callOpenAI } from "./openai";
 import { MAX_PAGES, estimatePages } from "./layout";
 import { EMPTY_SECTION_TEXT, SECTION_OUTLINE } from "./outline";
 import type { RawSource, Report, Section, SummaryPiece } from "./types";
@@ -89,14 +89,8 @@ async function assignSubsections(
     sentences: pieces.map((piece, n) => ({ n, topic: piece.topic, text: piece.text })),
   });
 
-  const timeout = AbortSignal.timeout(CALL_TIMEOUT_MS);
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getOpenAIApiKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const response = await callOpenAI(
+    {
       model: COMPOSE_MODEL,
       instructions: INSTRUCTIONS,
       input,
@@ -104,10 +98,9 @@ async function assignSubsections(
         format: { type: "json_schema", name: "assignments", strict: true, schema: JSON_SCHEMA },
       },
       max_output_tokens: 2000,
-    }),
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-  });
-  if (!response.ok) throw new Error(`배정 호출 실패 (HTTP ${response.status})`);
+    },
+    { signal, timeoutMs: CALL_TIMEOUT_MS },
+  );
 
   const parsed = responseSchema.parse(await response.json());
   let text = "";

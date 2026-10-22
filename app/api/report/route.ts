@@ -2,6 +2,7 @@
 // 검색(작업 6)·요약(작업 7)·규칙 검사(작업 8)·본문 작성과 최종 검사(작업 9)까지 모두 실제로 동작한다.
 import { ConfigError } from "@/lib/config";
 import { composeReport } from "@/lib/report/compose";
+import { OpenAIError } from "@/lib/report/openai";
 import { applyRules } from "@/lib/report/rules";
 import { countryInputSchema } from "@/lib/report/schema";
 import { SearchError, searchSources } from "@/lib/report/search";
@@ -80,11 +81,12 @@ export async function POST(request: Request) {
       } catch (error) {
         if (request.signal.aborted) return;
         // 내부 정보(키, 응답 내용)는 서버 기록에도 남기지 않고, 오류 종류와 메시지만 남긴다.
-        // ConfigError·SearchError의 메시지에는 변수 이름과 HTTP 번호만 들어 있다.
+        // ConfigError·SearchError·OpenAIError의 메시지에는 변수 이름과 HTTP 번호만 들어 있다.
         const known =
           error instanceof ConfigError ||
           error instanceof SearchError ||
-          error instanceof SummarizeError;
+          error instanceof SummarizeError ||
+          error instanceof OpenAIError;
         console.error("보고서 생성 중 오류:", known ? error.message : (error as Error)?.name);
         controller.enqueue(
           toLine({ type: "error", message: known ? error.userMessage : GENERIC_ERROR }),

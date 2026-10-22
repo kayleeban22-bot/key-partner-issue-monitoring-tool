@@ -1,19 +1,21 @@
 // Design Ref: §3.2 ② — 국가명으로 공개 자료를 찾아 자료 목록(기관·제목·날짜·링크·발췌)으로 돌려준다.
-// OpenAI의 웹 검색 도구를 쓰고, 보통 두 번만 부른다(비용 제한. 결과가 비면 호출마다 한 번 더 시도):
-//   A. 국제기구·KOTRA·외교부·주요 언론 등 신뢰 기관만 (6개 주제를 두루)
-//   B. 해당국 정부·통계청·중앙은행 등 공식 자료 (도메인을 미리 알 수 없어 제한 없이 검색)
+// OpenAI의 웹 검색 도구를 쓰고, 주제 묶음마다 따로 검색해 빠지는 항목이 없게 한다(결과가 비면 호출마다 한 번 더 시도):
+//   - 국제기구·KOTRA·외교부·주요 언론 등 신뢰 기관만 (국가 개요·정치 / 경제 / 산업 / 한국과의 관계·경제외교)
+//   - 해당국 정부·통계청·중앙은행 등 공식 자료 (도메인을 미리 알 수 없어 제한 없이 검색)
 // 서버 전용 코드이다. 키는 config.ts에서만 읽고, 어떤 메시지에도 넣지 않는다.
 import "server-only";
 import { z } from "zod";
-import { getOpenAIApiKey } from "../config";
 import { isOlderThanTwelveMonths, normalizePublishedDate } from "./dates";
+import { OpenAIError, callOpenAI } from "./openai";
 import { rawSourceSchema } from "./schema";
 import type { RawSource } from "./types";
 
 // 검색 호출에 쓰는 모델. 도메인 제한(filters)을 지원하는 모델이어야 한다. (gpt-4.1-mini는 지원하지 않음을 확인함)
 const SEARCH_MODEL = "gpt-4.1";
 const CALL_TIMEOUT_MS = 40_000; // route의 최대 실행 시간(60초) 안에 끝나도록 한다
-const MAX_SOURCES = 12;
+const MAX_SOURCES = 20;
+// 주제마다 먼저 이 수만큼은 확보하고(있을 때), 남는 자리는 신뢰도·최신순으로 채운다. 한 주제에 몰리지 않게 하려는 장치이다.
+const MIN_PER_TOPIC = 2;
 
 // PRD 5번 "신뢰 기관" 중 도메인으로 정할 수 있는 것. 해당국 정부는 아래 isOfficialHost로 따로 가린다.
 export const TRUSTED_DOMAINS = [
@@ -29,6 +31,12 @@ export const TRUSTED_DOMAINS = [
   "ft.com",
   "yna.co.kr",
   "nikkei.com",
+  // 한국 측 자료: 한국과의 관계·경제외교(MOU) 항목을 채우기 위해 추가
+  "motie.go.kr", // 산업통상자원부
+  "moef.go.kr", // 기획재정부
+  "kiep.go.kr", // 대외경제정책연구원
+  "koreaexim.go.kr", // 한국수출입은행
+  "kita.net", // 한국무역협회
 ];
 
 // 화면에 그대로 보여 줘도 되는 쉬운 문구를 userMessage에 담는다. (키·내부 정보 없음)
@@ -120,7 +128,7 @@ export function parseSourceLines(text: string, citedUrls: Set<string>): Candidat
       .join("|")
       .trim()
       .replace(/^[“”"'‘’]+|[“”"'‘’]+$/g, "")
-      .slice(0, 400);
+      .slice(0, 800);
     if (!excerpt) continue;
 
     found.push({ org, title, date, topic: Number(topicNo[0]), excerpt, url });
@@ -160,10 +168,11 @@ const INSTRUCTIONS =
   "확인하지 못한 값은 지어내지 말고, 모르면 그 자료를 빼세요.";
 
 // cutoff: 이 날짜 이후에 발행된 자료를 우선하라고 알려 준다. ("최근 12개월"보다 구체적인 날짜를 줘야 잘 따른다)
-const outputFormat = (cutoff: string) =>
+const outputFormat = (cutoff: string, topics: number[]) =>
   "한 건당 정확히 한 줄로 아래 형식으로만 답하세요(머리말·맺음말 금지). 출처 링크는 마지막 칸 문장 끝에 마크다운 링크로 붙이세요.\n" +
-  "기관명 | 제목(원문 언어 그대로) | 발행일(YYYY, YYYY-MM, YYYY-MM-DD 중 하나, 일반 하이픈 사용) | 주제번호(1~6 중 하나) | 숫자나 핵심 사실이 담긴 원문 문장(300자 이내, 번역 금지) [링크]\n" +
-  `발행일이 ${cutoff} 이후인 자료를 우선하고, 발행일을 모르는 자료는 빼세요. 외국어 자료도 포함하되 번역하지 마세요.`;
+  `기관명 | 제목(원문 언어 그대로) | 발행일(YYYY, YYYY-MM, YYYY-MM-DD 중 하나, 일반 하이픈 사용) | 주제번호(${topics.join(", ")} 중 하나) | ` +
+  "숫자나 핵심 사실이 담긴 원문 문장을 2~3개 이어서(300~700자, 번역 금지, 한 문장만 적지 마세요) [링크]\n" +
+  `발행일이 ${cutoff} 이후인 자료를 우선하되, 이 주제에 최근 자료가 없으면 더 오래된 자료도 괜찮습니다. 발행일을 모르는 자료는 빼세요. 외국어 자료도 포함하되 번역하지 마세요.`;
 
 const TOPICS =
   "주제: 1 국가 개요, 2 정치 동향(지정학, 대외관계), 3 경제 동향(GDP, FDI, 전망), " +
@@ -174,39 +183,77 @@ type SearchCall = {
   request: (country: string, cutoff: string) => string;
 };
 
+const TRUSTED_TOOLS = [{ type: "web_search", filters: { allowed_domains: TRUSTED_DOMAINS } }];
+const OPEN_TOOLS = [{ type: "web_search" }];
+
+// 주제 묶음마다 한 번씩 부른다. 한 번에 6개 주제를 모두 찾게 하면 경제 동향에 몰리고 나머지가 비었다.
 const CALLS: SearchCall[] = [
   {
-    // A. 국제기구·KOTRA·외교부·주요 언론에서 6개 주제를 두루
-    tools: [{ type: "web_search", filters: { allowed_domains: TRUSTED_DOMAINS } }],
+    // 1·2. 국가 개요와 정치 동향 (외교부 국가정보, 세계은행·UN 국가 소개, 주요 언론)
+    tools: TRUSTED_TOOLS,
     request: (country, cutoff) =>
       `국가: ${country}\n${TOPICS}\n\n` +
-      "IMF, 세계은행, OECD, UN, KOTRA, 외교부, 주요 언론 자료에서 6개 주제를 두루 덮도록 서로 다른 출처 최대 8건을 찾으세요.\n" +
-      outputFormat(cutoff),
+      "주제 1(국가 개요: 위치, 인구, 면적, 수도, 정치체제, 주요 산업)과 주제 2(정치 동향: 지정학적 위치와 이슈, 대외관계, 최근 정치 동향)를 다루는 자료를 " +
+      "외교부 국가·지역 정보, 세계은행, UN, IMF, 주요 언론에서 서로 다른 출처로 최대 6건 찾으세요. 두 주제를 모두 포함하세요.\n" +
+      outputFormat(cutoff, [1, 2]),
   },
   {
-    // B. 해당국 정부·통계청·중앙은행 등 공식 자료
-    tools: [{ type: "web_search" }],
+    // 3. 경제 동향 (IMF, 세계은행, OECD, KOTRA)
+    tools: TRUSTED_TOOLS,
+    request: (country, cutoff) =>
+      `국가: ${country}\n${TOPICS}\n\n` +
+      "주제 3(경제 동향: GDP 성장률, 외국인직접투자 FDI, 경제 전망, 국영기업의 해외 투자 프로젝트)을 다루는 자료를 " +
+      "IMF, 세계은행, OECD, KOTRA, 주요 언론에서 서로 다른 출처로 최대 5건 찾으세요.\n" +
+      outputFormat(cutoff, [3]),
+  },
+  {
+    // 4. 주요 산업 현황과 정책 (KOTRA, UNCTAD, 세계은행, 한국 기업 수주)
+    tools: TRUSTED_TOOLS,
+    request: (country, cutoff) =>
+      `국가: ${country}\n${TOPICS}\n\n` +
+      "주제 4(주요 산업 현황과 정책: 주력 산업, 산업 정책의 특징, 우리 기업의 수주 추진 현황)를 다루는 자료를 " +
+      "KOTRA, 세계은행, UNCTAD, 산업통상자원부, 주요 언론에서 서로 다른 출처로 최대 5건 찾으세요.\n" +
+      outputFormat(cutoff, [4]),
+  },
+  {
+    // 5·6. 한국과의 관계와 경제외교 (KOTRA, 외교부, 산업부, 기재부, KIEP)
+    tools: TRUSTED_TOOLS,
+    request: (country, cutoff) =>
+      `국가: ${country}\n${TOPICS}\n\n` +
+      `주제 5(한국과 ${country}의 관계: 교역 현황, 수주와 투자 현황, 전략적 중요성)와 주제 6(경제외교: 한국과 체결한 주요 MOU·협정)을 다루는 자료를 ` +
+      "KOTRA, 외교부, 산업통상자원부, 기획재정부, 대외경제정책연구원, 한국수출입은행, 연합뉴스에서 서로 다른 출처로 최대 6건 찾으세요. 두 주제를 모두 포함하세요.\n" +
+      outputFormat(cutoff, [5, 6]),
+  },
+  {
+    // 1·2·3·4. 해당국 정부·통계청·중앙은행 등 공식 자료 (도메인을 미리 알 수 없어 제한 없이 검색)
+    tools: OPEN_TOOLS,
     request: (country, cutoff) =>
       `국가: ${country}\n${TOPICS}\n\n` +
       `${country} 정부, 통계청, 중앙은행, 투자·산업 담당 부처 등 해당국 정부·공공기관의 공식 자료에서 ` +
-      "위 주제 중 해당하는 것을 서로 다른 출처 최대 4건 찾으세요.\n" +
-      outputFormat(cutoff),
+      "주제 1~4 중 해당하는 것을 서로 다른 출처로 최대 5건 찾으세요.\n" +
+      outputFormat(cutoff, [1, 2, 3, 4]),
+  },
+  {
+    // 5·6. 한국 대사관·해당국 정부가 낸 한국 관련 소식 (협력, MOU, 수주, 투자)
+    tools: OPEN_TOOLS,
+    request: (country, cutoff) =>
+      `국가: ${country}\n${TOPICS}\n\n` +
+      `주한 ${country} 대사관, 주${country} 한국대사관, ${country} 정부가 발표한 한국과의 경제협력·MOU·수주·투자 관련 공식 자료에서 ` +
+      "주제 5와 6에 해당하는 것을 서로 다른 출처로 최대 4건 찾으세요.\n" +
+      outputFormat(cutoff, [5, 6]),
   },
 ];
 
 async function runCall(
   call: SearchCall,
   country: string,
-  apiKey: string,
   signal: AbortSignal | undefined,
   today: string,
   cutoff: string,
 ): Promise<Candidate[]> {
-  const timeout = AbortSignal.timeout(CALL_TIMEOUT_MS);
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
+  // 일시적인 실패는 다시 시도하고, 이용 한도가 바닥난 경우는 OpenAIError(quota)로 바로 알린다.
+  const response = await callOpenAI(
+    {
       model: SEARCH_MODEL,
       tools: call.tools,
       // 검색 도구를 반드시 쓰게 한다. 안 쓰면 모델이 주소를 지어내기 쉽다(실제로 확인함).
@@ -214,12 +261,9 @@ async function runCall(
       instructions: `${INSTRUCTIONS} 오늘 날짜는 ${today}입니다.`,
       input: call.request(country, cutoff),
       max_output_tokens: 2500,
-    }),
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-  });
-
-  // 응답 본문은 기록하지 않는다. 상태 번호만 남긴다.
-  if (!response.ok) throw new SearchError(`OpenAI 검색 호출 실패 (HTTP ${response.status})`);
+    },
+    { signal, timeoutMs: CALL_TIMEOUT_MS },
+  );
 
   const parsed = responseSchema.safeParse(await response.json());
   if (!parsed.success) throw new SearchError("OpenAI 응답 모양을 읽지 못했습니다");
@@ -258,22 +302,24 @@ export async function searchSources(
   const cutoffDate = new Date(now.getTime());
   cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 1);
   const cutoff = cutoffDate.toISOString().slice(0, 10);
-  const apiKey = getOpenAIApiKey(); // 키가 없으면 ConfigError (호출한 쪽이 안내 문구를 처리)
 
   const settled = await Promise.allSettled(
     CALLS.map(async (call) => {
-      const first = await runCall(call, country, apiKey, options.signal, today, cutoff);
+      const first = await runCall(call, country, options.signal, today, cutoff);
       if (first.length > 0) return first;
-      // 검증된 자료가 하나도 없으면 한 번만 다시 시도한다 (호출은 최대 4번)
-      return runCall(call, country, apiKey, options.signal, today, cutoff);
+      // 검증된 자료가 하나도 없으면 한 번만 다시 시도한다
+      return runCall(call, country, options.signal, today, cutoff);
     }),
   );
 
   const failedCalls = settled.filter((result) => result.status === "rejected").length;
   if (failedCalls === CALLS.length) {
-    throw settled[0].status === "rejected" && settled[0].reason instanceof SearchError
-      ? settled[0].reason
-      : new SearchError("OpenAI 검색 호출이 모두 실패했습니다");
+    const reasons = settled.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+    // 이용 한도 문제를 가장 먼저 알린다. 그다음 키 설정 같은 이미 알려진 오류, 마지막으로 일반 오류.
+    const quota = reasons.find((reason) => reason instanceof OpenAIError && reason.kind === "quota");
+    if (quota) throw quota;
+    const known = reasons.find((reason) => reason instanceof OpenAIError || reason instanceof SearchError);
+    throw known ?? new SearchError("OpenAI 검색 호출이 모두 실패했습니다");
   }
 
   const candidates = settled.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
@@ -313,8 +359,19 @@ export async function searchSources(
   };
   kept.sort((a, b) => rank(a) - rank(b) || b.date.localeCompare(a.date));
 
-  dropped += Math.max(0, kept.length - MAX_SOURCES);
-  const sources = kept.slice(0, MAX_SOURCES).map((source, index) => ({ ...source, id: index + 1 }));
+  // 한 주제에 몰리지 않게, 주제마다 앞에서부터 MIN_PER_TOPIC건씩 먼저 확보하고 남는 자리를 위 순서대로 채운다.
+  const chosen = new Set<Omit<RawSource, "id">>();
+  for (let topic = 1; topic <= 6; topic += 1) {
+    kept.filter((source) => source.topic === topic).slice(0, MIN_PER_TOPIC).forEach((source) => chosen.add(source));
+  }
+  for (const source of kept) {
+    if (chosen.size >= MAX_SOURCES) break;
+    chosen.add(source);
+  }
+  const picked = kept.filter((source) => chosen.has(source)).slice(0, MAX_SOURCES);
+
+  dropped += kept.length - picked.length;
+  const sources = picked.map((source, index) => ({ ...source, id: index + 1 }));
 
   return { sources, dropped, failedCalls };
 }
