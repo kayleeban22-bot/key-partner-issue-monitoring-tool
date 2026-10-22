@@ -3,7 +3,7 @@
 // AI를 쓸 수 없을 때(이용 한도 소진 등)에도 공개 통계만으로 보고서를 만든다.
 import { ConfigError } from "@/lib/config";
 import { composeReport } from "@/lib/report/compose";
-import { fetchOpenData } from "@/lib/report/opendata";
+import { candidateNames, fetchOpenData, lookupCountry } from "@/lib/report/opendata";
 import { OpenAIError } from "@/lib/report/openai";
 import { applyRules } from "@/lib/report/rules";
 import { countryInputSchema } from "@/lib/report/schema";
@@ -56,6 +56,16 @@ export async function POST(request: Request) {
     return Response.json({ message }, { status: 400 });
   }
   const { country } = parsed.data;
+
+  // 이름이 여러 나라에 해당하면(예: 콩고) 엉뚱한 나라의 보고서가 만들어지지 않도록, 만들기 전에 정확한 이름을 묻는다.
+  const lookup = lookupCountry(country);
+  if (lookup.kind === "ambiguous") {
+    const names = candidateNames(lookup.candidates).join(", ");
+    return Response.json(
+      { message: `"${country}"은(는) 여러 나라에 해당합니다. 정확한 국가 이름으로 다시 입력해 주세요. (${names})` },
+      { status: 400 },
+    );
+  }
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

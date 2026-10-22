@@ -32,6 +32,10 @@ const ALIASES: Record<string, string> = {
   스와질란드: "SZ",
   에스와티니: "SZ",
   캐나다: "CA",
+  도미니카연방: "DM",
+  콩고민주공화국: "CD",
+  민주콩고: "CD",
+  콩고공화국: "CG",
 };
 
 // 현재 쓰이는 ISO 국가 코드. Intl은 옛 코드(VD: 북베트남 등)에도 같은 이름을 돌려줘서, 이 목록에 있는 코드만 쓴다.
@@ -103,6 +107,13 @@ export function lookupCountry(input: string): CountryLookup {
     if (codes.size > 1) return { kind: "ambiguous", candidates: [...codes] };
   }
   return { kind: "none" };
+}
+
+// 모호한 이름의 후보 국가 코드를 한국어 국가 이름으로 바꿔 안내 문구에 쓴다. (예: CD, CG → 콩고민주공화국, 콩고공화국)
+export function candidateNames(codes: string[]): string[] {
+  const ko = new Intl.DisplayNames(["ko"], { type: "region" });
+  // DM의 기본 이름 "도미니카"는 그 자체가 모호하므로 "도미니카 연방"으로 안내한다.
+  return codes.map((code) => (code === "DM" ? "도미니카 연방" : (ko.of(code) ?? code)));
 }
 
 // ---------- 숫자 모양 만들기 ----------
