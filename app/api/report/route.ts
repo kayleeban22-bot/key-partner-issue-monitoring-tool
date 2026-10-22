@@ -1,9 +1,10 @@
 // Design Ref: §3.4 — 보고서 생성 API. 진행 상황을 한 줄씩(JSON) 흘려 보내고 마지막에 보고서를 보낸다.
-// 자료 검색(작업 6)은 실제로 동작하고, 요약·작성·검증 단계는 아직 가짜 보고서이다(작업 7~9에서 채운다).
+// 자료 검색(작업 6)과 요약(작업 7)은 실제로 동작하고, 작성·검증 단계는 아직 가짜이다(작업 8~9에서 채운다).
 import { ConfigError } from "@/lib/config";
 import { buildFakeReport } from "@/lib/report/fake";
 import { countryInputSchema, reportSchema } from "@/lib/report/schema";
 import { SearchError, searchSources } from "@/lib/report/search";
+import { SummarizeError, summarizeSources } from "@/lib/report/summarize";
 import type { ProgressStep, Source, StreamChunk } from "@/lib/report/types";
 
 // 최대 실행 시간(초). 검색 호출은 각각 40초 안에 끝나도록 했다. 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
@@ -20,8 +21,8 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// 검색 다음 단계들. 아직 가짜라서 단계가 바뀌는 모습만 보이게 잠깐 쉰다.
-const LATER_STEPS: ProgressStep[] = ["summarize", "compose", "verify"];
+// 요약 다음 단계들. 아직 가짜라서 단계가 바뀌는 모습만 보이게 잠깐 쉰다.
+const LATER_STEPS: ProgressStep[] = ["compose", "verify"];
 
 const GENERIC_ERROR = "보고서를 만드는 중 문제가 생겼습니다. 잠시 후 다시 시도해 주세요.";
 
@@ -54,19 +55,29 @@ export async function POST(request: Request) {
           ({ id, org, title, date, url, isOld }) => ({ id, org, title, date, url, isOld }),
         );
 
-        // ③~⑥ 요약·작성·검증 (아직 가짜)
+        // ③ 요약 (실제): 자료마다 한국어 요약 문장을 만들고 출처 번호를 붙인다.
+        if (request.signal.aborted) return;
+        controller.enqueue(toLine({ type: "progress", step: "summarize" }));
+        const { pieces } = await summarizeSources(country, result.sources, {
+          signal: request.signal,
+        });
+
+        // ④~⑥ 작성·검증 (아직 가짜)
         for (const step of LATER_STEPS) {
           if (request.signal.aborted) return; // 화면이 닫히면 중단한다
           controller.enqueue(toLine({ type: "progress", step }));
           await sleep(400);
         }
-        const report = reportSchema.parse(buildFakeReport(country, sources));
+        const report = reportSchema.parse(buildFakeReport(country, sources, pieces));
         controller.enqueue(toLine({ type: "done", report }));
       } catch (error) {
         if (request.signal.aborted) return;
         // 내부 정보(키, 응답 내용)는 서버 기록에도 남기지 않고, 오류 종류와 메시지만 남긴다.
         // ConfigError·SearchError의 메시지에는 변수 이름과 HTTP 번호만 들어 있다.
-        const known = error instanceof ConfigError || error instanceof SearchError;
+        const known =
+          error instanceof ConfigError ||
+          error instanceof SearchError ||
+          error instanceof SummarizeError;
         console.error("보고서 생성 중 오류:", known ? error.message : (error as Error)?.name);
         controller.enqueue(
           toLine({ type: "error", message: known ? error.userMessage : GENERIC_ERROR }),
