@@ -21,7 +21,14 @@ function fileNameFrom(header: string | null, fallback: string): string {
   return fallback;
 }
 
-export default function DownloadPanel({ report }: { report: Report }) {
+type Props = {
+  report: Report;
+  // 이 보고서(수정본 포함)를 이미 내려받았는지. 수정하면 다시 false가 된다.
+  downloaded: boolean;
+  onDownloaded: () => void;
+};
+
+export default function DownloadPanel({ report, downloaded, onDownloaded }: Props) {
   const [format, setFormat] = useState<Format>("docx");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +63,7 @@ export default function DownloadPanel({ report }: { report: Report }) {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      onDownloaded();
     } catch {
       setError("파일을 받지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
     } finally {
@@ -90,6 +98,16 @@ export default function DownloadPanel({ report }: { report: Report }) {
         </button>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">서버에 저장되지 않습니다. 꼭 내려받아 보관하세요.</p>
       </div>
+
+      {/* 내려받았는지 눈에 띄게 알려 준다. 안 받았으면 창을 닫을 때 브라우저가 한 번 더 묻는다. */}
+      <p
+        role="status"
+        className={`text-sm font-medium ${downloaded ? "text-green-700 dark:text-green-400" : "text-amber-800 dark:text-amber-300"}`}
+      >
+        {downloaded
+          ? "✓ 내려받았습니다. 고치면 다시 내려받아야 합니다."
+          : "아직 내려받지 않았습니다. 이 창을 닫거나 새로고침하면 보고서가 사라집니다."}
+      </p>
 
       {error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">

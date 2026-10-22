@@ -181,9 +181,12 @@ type Props = {
   report: Report;
   // 담당자가 항목을 고쳐 저장하면 새 보고서를 알려 준다. (서버에는 저장하지 않는다)
   onChange: (report: Report) => void;
+  // 지금 보고서를 이미 내려받았는지, 내려받았을 때 알리는 함수 (아직 안 받았을 때 창을 닫으면 경고하려고 쓴다)
+  downloaded: boolean;
+  onDownloaded: () => void;
 };
 
-export default function ReportView({ report, onChange }: Props) {
+export default function ReportView({ report, onChange, downloaded, onDownloaded }: Props) {
   // 한 번에 한 항목만 고친다. 저장할 때 출처 번호를 다시 매기기 때문에, 동시에 고치면 번호가 어긋난다.
   const [editingNo, setEditingNo] = useState<Section["no"] | null>(null);
 
@@ -220,7 +223,7 @@ export default function ReportView({ report, onChange }: Props) {
       )}
       <hr className="border-black/10 dark:border-white/15" />
       <SourceList sources={report.sources} />
-      <DownloadPanel report={report} />
+      <DownloadPanel report={report} downloaded={downloaded} onDownloaded={onDownloaded} />
     </article>
   );
 }
