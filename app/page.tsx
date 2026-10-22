@@ -1,9 +1,10 @@
 "use client";
 
 // Design Ref: §2 — 화면은 이 한 장이고, 입력 → 생성 중 → 결과 순으로 바뀐다.
-// 지금은 입력과 생성 중 표시까지 연결돼 있다. 결과 화면은 작업 5, 로딩·실패 다듬기는 작업 15에서 이어 붙인다.
+// 입력, 생성 중 표시, 결과 보기까지 연결돼 있다. 수정은 작업 12, 로딩·실패 다듬기는 작업 15에서 이어 붙인다.
 import { useEffect, useRef, useState } from "react";
 import CountryForm from "@/components/CountryForm";
+import ReportView from "@/components/ReportView";
 import { ReportRequestError, requestReport } from "@/lib/report/client";
 import type { ProgressStep, Report } from "@/lib/report/types";
 
@@ -55,7 +56,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-12 dark:bg-black sm:py-20">
-      <main className="flex w-full max-w-xl flex-col gap-8">
+      <main className="flex w-full max-w-3xl flex-col gap-8">
         <header className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             경제협력 모니터링 보고 도구
@@ -67,7 +68,7 @@ export default function Home() {
 
         <section
           aria-label="국가 입력"
-          className="rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-900 sm:p-6"
+          className="w-full max-w-xl rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-900 sm:p-6"
         >
           <CountryForm onSubmit={handleSubmit} disabled={running} />
         </section>
@@ -98,12 +99,7 @@ export default function Home() {
           </p>
         )}
 
-        {view.kind === "done" && (
-          <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
-            「{view.report.title}」을(를) 받았습니다 (항목 {view.report.sections.length}개, 출처{" "}
-            {view.report.sources.length}개). 보고서 화면은 다음 작업에서 만듭니다.
-          </p>
-        )}
+        {view.kind === "done" && <ReportView report={view.report} />}
       </main>
     </div>
   );
