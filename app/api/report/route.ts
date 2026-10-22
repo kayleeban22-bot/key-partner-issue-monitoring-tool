@@ -1,7 +1,8 @@
 // Design Ref: §3.4 — 보고서 생성 API. 진행 상황을 한 줄씩(JSON) 흘려 보내고 마지막에 보고서를 보낸다.
-// 자료 검색(작업 6)과 요약(작업 7)은 실제로 동작하고, 작성·검증 단계는 아직 가짜이다(작업 8~9에서 채운다).
+// 자료 검색(작업 6)·요약(작업 7)·규칙 검사(작업 8)는 실제로 동작하고, 본문 작성·최종 검증은 아직 가짜이다(작업 9에서 채운다).
 import { ConfigError } from "@/lib/config";
 import { buildFakeReport } from "@/lib/report/fake";
+import { applyRules } from "@/lib/report/rules";
 import { countryInputSchema, reportSchema } from "@/lib/report/schema";
 import { SearchError, searchSources } from "@/lib/report/search";
 import { SummarizeError, summarizeSources } from "@/lib/report/summarize";
@@ -58,17 +59,27 @@ export async function POST(request: Request) {
         // ③ 요약 (실제): 자료마다 한국어 요약 문장을 만들고 출처 번호를 붙인다.
         if (request.signal.aborted) return;
         controller.enqueue(toLine({ type: "progress", step: "summarize" }));
-        const { pieces } = await summarizeSources(country, result.sources, {
+        const summary = await summarizeSources(country, result.sources, {
           signal: request.signal,
         });
 
-        // ④~⑥ 작성·검증 (아직 가짜)
+        // ④ 규칙 검사 (실제): 숫자가 원문과 다르거나 사적 정보가 든 문장은 빼고, 최근 자료를 앞에 둔다.
+        const { pieces, removed } = applyRules(summary.pieces, result.sources);
+        const notes: string[] = [];
+        if (removed.numberMismatch > 0) {
+          notes.push(`숫자가 원문과 맞지 않아 문장 ${removed.numberMismatch}개를 뺐습니다.`);
+        }
+        if (removed.privateInfo > 0) {
+          notes.push(`연락처·주소 같은 사적 정보가 있어 문장 ${removed.privateInfo}개를 뺐습니다.`);
+        }
+
+        // ⑤~⑥ 작성·검증 (아직 가짜)
         for (const step of LATER_STEPS) {
           if (request.signal.aborted) return; // 화면이 닫히면 중단한다
           controller.enqueue(toLine({ type: "progress", step }));
           await sleep(400);
         }
-        const report = reportSchema.parse(buildFakeReport(country, sources, pieces));
+        const report = reportSchema.parse(buildFakeReport(country, sources, pieces, notes));
         controller.enqueue(toLine({ type: "done", report }));
       } catch (error) {
         if (request.signal.aborted) return;
