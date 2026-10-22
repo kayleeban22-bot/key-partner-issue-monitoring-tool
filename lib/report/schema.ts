@@ -29,6 +29,14 @@ export const rawSourceSchema = sourceSchema.extend({
   topic: sectionNoSchema, // 이 자료가 쓰일 표준 목차 항목 번호
 });
 
+// Design Ref: §3.2 ③ — 요약 조각: 한 자료(sourceId)에 근거한 한국어 문장 하나.
+// 작업 9가 이 조각들을 표준 목차 항목에 배치해 본문으로 만든다.
+export const summaryPieceSchema = z.object({
+  sourceId: z.number().int().positive(), // 근거가 된 출처 번호 (요약마다 출처가 반드시 하나 있다)
+  topic: sectionNoSchema, // 쓰일 표준 목차 항목 번호
+  text: z.string().min(1),
+});
+
 export const sentenceSchema = z.object({
   text: z.string().min(1),
   sourceIds: z.array(z.number().int().positive()),

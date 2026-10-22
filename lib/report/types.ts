@@ -10,10 +10,12 @@ import type {
   sourceSchema,
   streamChunkSchema,
   subsectionSchema,
+  summaryPieceSchema,
 } from "./schema";
 
 export type Source = z.infer<typeof sourceSchema>;
 export type RawSource = z.infer<typeof rawSourceSchema>; // 서버 안에서만 사용
+export type SummaryPiece = z.infer<typeof summaryPieceSchema>;
 export type Sentence = z.infer<typeof sentenceSchema>;
 export type Subsection = z.infer<typeof subsectionSchema>;
 export type SectionNo = z.infer<typeof sectionNoSchema>;
