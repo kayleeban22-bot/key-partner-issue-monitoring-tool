@@ -4,6 +4,7 @@
 // 생성 중 표시·취소, 실패 안내와 다시 시도, 결과 수정, 내려받기 전 창 닫기·새로고침 경고(작업 15)까지 연결돼 있다.
 import { useEffect, useRef, useState } from "react";
 import CountryForm from "@/components/CountryForm";
+import StageBackground from "@/components/StageBackground";
 import ProgressView from "@/components/ProgressView";
 import ReportView from "@/components/ReportView";
 import { ReportRequestError, requestReport } from "@/lib/report/client";
@@ -82,32 +83,69 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-12 dark:bg-black sm:py-20">
-      <main className="flex w-full max-w-3xl flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            경제협력 모니터링 보고 도구
-          </h1>
-          <p className="text-base text-zinc-600 dark:text-zinc-400">
-            국가를 입력하면 공개 자료로 보고서를 만듭니다
-          </p>
+    <div className="relative flex flex-1 flex-col">
+      <StageBackground />
+
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 pb-16 sm:px-10">
+        {/* 머리글: 안쪽을 향한 화살표 로고와 이름 */}
+        <header className="in-fade flex items-center gap-4 py-7" style={{ ["--d" as string]: "0s" }}>
+          <svg aria-hidden width="40" height="40" viewBox="0 0 46 46" fill="none" stroke="#fff" strokeWidth="3">
+            {[0, 90, 180, 270].map((angle) => (
+              <g key={angle} transform={`rotate(${angle} 23 23)`}>
+                <path d="M23 0V19.5" />
+                <path d="M14 10.2L23 19.2L32 10.2" />
+              </g>
+            ))}
+          </svg>
+          <span className="font-jb text-sm tracking-tight text-[var(--sub)]">재정경제부 대외경제국 · 내부 보고용</span>
         </header>
 
-        <section
-          aria-label="국가 입력"
-          className="w-full max-w-xl rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-900 sm:p-6"
-        >
-          <CountryForm onSubmit={handleSubmit} disabled={view.kind === "running"} />
+        {/* 첫 화면: 큰 제목, 설명, 국가 입력, 통계 줄 */}
+        <section aria-label="국가 입력" className="flex max-w-xl flex-col gap-6 pt-10 sm:pt-20">
+          <h1 className="text-[2.6rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[4.3rem]">
+            <span className="in-line" style={{ ["--d" as string]: "0.34s" }}>
+              <span>경제협력</span>
+            </span>
+            <span className="in-line" style={{ ["--d" as string]: "0.43s" }}>
+              <span>모니터링 보고 도구</span>
+            </span>
+          </h1>
+          <p className="in-rise font-jb text-[1.02rem] leading-7 tracking-[-0.03em] text-[var(--sub)]" style={{ ["--d" as string]: "0.74s" }}>
+            국가를 입력하면 공개 자료를 조사·요약해
+            <br />
+            표준 양식의 보고서를 만들어 줍니다.
+          </p>
+          <div className="in-rise" style={{ ["--d" as string]: "0.9s" }}>
+            <CountryForm onSubmit={handleSubmit} disabled={view.kind === "running"} />
+          </div>
+
+          <dl className="in-rise mt-6 flex items-stretch gap-6 sm:gap-8" style={{ ["--d" as string]: "1.04s" }}>
+            {[
+              ["6", "표준 목차 항목"],
+              ["2–3", "A4 분량(쪽)"],
+              ["12", "과거 자료 기준(개월)"],
+            ].map(([number, label], index) => (
+              <div key={label} className="flex items-stretch gap-6 sm:gap-8">
+                {index > 0 && <span className="rule-v" aria-hidden />}
+                <div className="flex flex-col gap-1">
+                  <dt className="font-jb text-3xl font-medium text-white">{number}</dt>
+                  <dd className="font-[family-name:var(--font-sg)] text-sm tracking-[-0.02em] text-[var(--lab)]">{label}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
         </section>
 
-        {view.kind === "running" && (
-          <ProgressView country={view.country} current={view.current} onCancel={handleCancel} />
-        )}
+        {/* 진행·오류·결과는 첫 화면 아래에 이어서 보여 준다 */}
+        <div className="mt-14 flex flex-col gap-8">
+          {view.kind === "running" && (
+            <ProgressView country={view.country} current={view.current} onCancel={handleCancel} />
+          )}
 
         {view.kind === "error" && (
           <section
             role="alert"
-            className="flex flex-col gap-3 rounded-xl border border-red-300 bg-red-50 p-5 text-sm text-red-900 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100"
+            className="flex flex-col gap-3 rounded-none border border-red-300 bg-red-50 p-5 text-sm text-red-900 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100"
           >
             <p>{view.message}</p>
             {view.suggestions.length > 0 ? (
@@ -118,7 +156,7 @@ export default function Home() {
                     key={name}
                     type="button"
                     onClick={() => handleSubmit(name)}
-                    className="rounded-md bg-foreground px-3 py-1.5 font-medium text-background hover:opacity-85"
+                    className="rounded-none bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
                   >
                     {name}
                   </button>
@@ -128,7 +166,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => handleSubmit(view.country)}
-                className="self-start rounded-md bg-foreground px-3 py-1.5 font-medium text-background hover:opacity-85"
+                className="self-start rounded-none bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
               >
                 {view.country} 다시 시도
               </button>
@@ -144,7 +182,8 @@ export default function Home() {
             onDownloaded={() => setDownloadedReport(view.report)}
           />
         )}
-      </main>
+        </div>
+      </div>
     </div>
   );
 }
