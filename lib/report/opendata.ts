@@ -3,6 +3,7 @@
 //   - 세계은행: 인구, GDP, 1인당 GDP, 실질 GDP 성장률, 외국인직접투자 순유입, 소비자물가 상승률, 소득 분류
 //   - IMF: 실질 GDP 성장률과 소비자물가 상승률 전망
 // 한계: 연 단위 확정치라 올해의 분기·월 속보는 없다. 그런 최신 동향은 AI 검색이 맡는다.
+import { isOlderThanTwelveMonths } from "./dates";
 import type { Source, SummaryPiece } from "./types";
 
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -123,7 +124,9 @@ export function candidateNames(codes: string[]): string[] {
 
 // ---------- 숫자 모양 만들기 ----------
 
-const comma = (n: number) => Math.round(n).toLocaleString("en-US");
+// 공개 통계의 값을 원문(API가 준 값) 그대로 적는다. 반올림하거나 억·조 같은 단위로 바꾸지 않고, 자릿수 구분 쉼표만 넣는다.
+// (PRD 5번 "숫자와 통계는 원문 그대로 옮기고 추정해서 만들지 않는다")
+const exact = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 20 });
 
 // 받침이 있으면 "은", 없으면 "는"을 붙인다. (베트남은 / 이집트는). 한글이 아니면 "은(는)"으로 둔다.
 export function withTopicMarker(name: string): string {
@@ -133,19 +136,10 @@ export function withTopicMarker(name: string): string {
   return `${name}${(code - 0xac00) % 28 === 0 ? "는" : "은"}`;
 }
 
-// 달러 금액을 한국식 단위로 적는다. 코드가 직접 계산하므로 AI의 단위 변환 실수가 생기지 않는다.
-export function formatUsd(value: number): string {
-  const v = Math.abs(value);
-  if (v >= 1e12) return `${Number((v / 1e12).toFixed(2))}조 달러`;
-  if (v >= 1e8) {
-    const eok = v / 1e8;
-    return eok >= 1000 ? `${comma(eok)}억 달러` : `${Number(eok.toFixed(1))}억 달러`;
-  }
-  if (v >= 1e4) return `${comma(v / 1e4)}만 달러`;
-  return `${comma(v)}달러`;
-}
+// 달러 금액을 원문 그대로 적는다. (FDI 유출처럼 부호는 문장에서 따로 말하므로 절댓값을 쓴다)
+export const formatUsd = (value: number) => `${exact(Math.abs(value))}달러`;
 
-export const formatPercent = (value: number) => `${Number(value.toFixed(2))}%`;
+export const formatPercent = (value: number) => `${exact(value)}%`;
 
 // ---------- 공개 API 호출 ----------
 
@@ -292,13 +286,13 @@ export async function fetchOpenData(
   const wbDraft: { topic: 1 | 3; subsection: number; text: string }[] = [];
 
   const pop = latest(population);
-  if (pop) wbDraft.push({ topic: 1, subsection: 0, text: `${pop.year}년 ${country}의 인구는 ${comma(pop.value)}명이다.` });
+  if (pop) wbDraft.push({ topic: 1, subsection: 0, text: `${pop.year}년 ${country}의 인구는 ${exact(pop.value)}명이다.` });
 
   const gdpValue = latest(gdp);
-  if (gdpValue) wbDraft.push({ topic: 1, subsection: 0, text: `${gdpValue.year}년 ${country}의 명목 GDP는 약 ${formatUsd(gdpValue.value)}였다.` });
+  if (gdpValue) wbDraft.push({ topic: 1, subsection: 0, text: `${gdpValue.year}년 ${country}의 명목 GDP는 ${formatUsd(gdpValue.value)}였다.` });
 
   const pc = latest(perCapita);
-  if (pc) wbDraft.push({ topic: 1, subsection: 0, text: `${pc.year}년 ${country}의 1인당 명목 GDP는 약 ${comma(pc.value)}달러였다.` });
+  if (pc) wbDraft.push({ topic: 1, subsection: 0, text: `${pc.year}년 ${country}의 1인당 명목 GDP는 ${formatUsd(pc.value)}였다.` });
 
   const income = INCOME_KO[info.income];
   if (income) {
@@ -325,8 +319,8 @@ export async function fetchOpenData(
       subsection: 2,
       text:
         fdiValue.value >= 0
-          ? `${fdiValue.year}년 ${country}의 외국인직접투자 순유입액(국제수지 기준)은 약 ${amount}였다.`
-          : `${fdiValue.year}년 ${country}의 외국인직접투자(국제수지 기준)는 약 ${amount}의 순유출을 기록했다.`,
+          ? `${fdiValue.year}년 ${country}의 외국인직접투자 순유입액(국제수지 기준)은 ${amount}였다.`
+          : `${fdiValue.year}년 ${country}의 외국인직접투자(국제수지 기준)는 ${amount}의 순유출을 기록했다.`,
     });
   }
 
@@ -358,13 +352,15 @@ export async function fetchOpenData(
     .sort();
 
   if (wbDraft.length > 0) {
+    // 세계은행이 알려 주는 자료 갱신일을 발행일로 쓰고, 12개월이 넘었으면 "과거 자료"로 표시한다.
+    const wbDate = updates[updates.length - 1] ?? today;
     sources.push({
       id: sources.length + 1,
       org: "World Bank",
       title: `World Development Indicators — ${info.name}`,
-      date: updates[updates.length - 1] ?? today, // 세계은행이 알려 주는 자료 갱신일
+      date: wbDate,
       url: `https://data.worldbank.org/country/${iso2.toLowerCase()}`,
-      isOld: false,
+      isOld: isOlderThanTwelveMonths(wbDate, now),
     });
     for (const draft of wbDraft) pieces.push({ sourceId: sources.length, ...draft });
   }
