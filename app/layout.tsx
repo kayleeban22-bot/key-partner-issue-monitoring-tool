@@ -1,20 +1,13 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-// 디자인 글꼴: 제목·버튼·라벨은 Space Grotesk(SG), 보조 문구·숫자는 JetBrains Mono(JB).
-// 두 글꼴에는 한글이 없어서 한글은 globals.css의 시스템 한국어 글꼴로 보인다.
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-sg",
+// 디자인 글꼴: Plus Jakarta Sans. 한글은 들어 있지 않아서 한글은 globals.css의 시스템 한국어 글꼴로 보인다.
+// display: "block" — 등장 효과가 글자가 준비된 뒤에 재생되도록 한다.
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-pjs",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  display: "block",
-});
-
-const jetBrainsMono = JetBrains_Mono({
-  variable: "--font-jb",
-  subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["300", "400", "500", "600", "800"],
   display: "block",
 });
 
@@ -26,7 +19,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // dark: 화면 전체를 어두운 무대(검정 바탕)로 고정한다. (globals.css의 dark 변형이 이 클래스를 따른다)
-    <html lang="ko" className={`${spaceGrotesk.variable} ${jetBrainsMono.variable} dark h-full antialiased`}>
+    <html lang="ko" className={`${plusJakarta.variable} dark h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

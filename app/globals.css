@@ -6,10 +6,15 @@
 :root {
   --background: #000000;
   --foreground: #ffffff;
-  --brand: #c81b1c; /* 빨간 버튼 */
-  --brand-dark: #b01617;
-  --sub: #e6e6e6; /* 보조 문구 */
-  --lab: #949494; /* 라벨 */
+  --brand: #fdfdfd; /* 흰색 알약 버튼 */
+  --brand-dark: #ffffff;
+  --btn-ink: #050505;
+  --ink-muted: #ededed;
+  --panel: #181818;
+  --glass-fill: rgba(0, 0, 0, 0.78);
+  --glass-line: rgba(255, 255, 255, 0.09);
+  --e-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-soft: cubic-bezier(0.25, 0.8, 0.3, 1);
   color-scheme: dark;
 }
 
@@ -18,8 +23,6 @@
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);
   --color-brand-dark: var(--brand-dark);
-  --font-sg: var(--font-sg), "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
-  --font-jb: var(--font-jb), ui-monospace, "Apple SD Gothic Neo", "Malgun Gothic", monospace;
 }
 
 html,
@@ -29,163 +32,178 @@ body {
 
 body {
   color: var(--foreground);
-  /* 보고서 본문은 읽기 편하도록 한국어 시스템 글꼴을 쓴다 */
-  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  /* Plus Jakarta Sans(영문·숫자) 뒤에 한국어 시스템 글꼴을 둔다 */
+  font-family: var(--font-pjs), system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   text-rendering: geometricPrecision;
 }
 
-/* 제목·버튼·라벨은 SG, 보조 문구·숫자는 JB */
-h1,
-h2,
-h3,
-h4,
-button,
-legend {
-  font-family: var(--font-sg);
-}
-.font-jb {
-  font-family: var(--font-jb);
-}
-
-:focus-visible {
-  outline: 2px solid #fff;
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #a78bfa;
   outline-offset: 3px;
 }
 
-/* ---------- 배경 영상 무대 ---------- */
-.stage-bg {
-  position: fixed;
-  inset: 0;
+/* ---------- 첫 화면(히어로)과 영상 무대 ---------- */
+.hero {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
   overflow: hidden;
-  pointer-events: none;
   background: #000;
-  z-index: 0;
 }
-.stage-bg video {
+/* 1280:800 비율의 영상 상자. 화면을 항상 덮는다. */
+.bg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, calc(100dvh * 1.6));
+  height: max(62.5vw, 100dvh);
+  background-color: #000;
+  pointer-events: none;
+}
+.bg-video {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: right top;
-  filter: url(#grade);
+  object-position: 51% 8%;
+  display: block;
+  background-color: #000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.9s linear;
 }
-/* 왼쪽 글자가 잘 읽히도록 왼쪽을 어둡게 덮는다. 아래로 갈수록 검정에 가까워져 보고서 본문도 읽힌다. */
-.stage-scrim {
+.bg-video.is-active {
+  opacity: 1;
+}
+/* 글자가 잘 읽히도록 가운데를 살짝 어둡게 하고, 아래는 검정으로 이어지게 한다 */
+.hero-scrim {
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background:
-    linear-gradient(100deg, #000 24%, rgba(0, 0, 0, 0.72) 50%, rgba(0, 0, 0, 0.2) 76%, transparent 92%),
-    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.55) 60%, #000 100%);
-}
-@media (max-width: 767px) {
-  .stage-bg video {
-    object-position: 78% top;
-  }
-  .stage-scrim {
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.5) 24%, rgba(0, 0, 0, 0.86) 42%, #000 66%);
-  }
+    radial-gradient(ellipse at 50% 55%, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.18) 55%, transparent 80%),
+    linear-gradient(180deg, transparent 70%, #000 100%);
 }
 
-/* ---------- 빨간 직각 버튼 ---------- */
-.btn-red {
+/* ---------- 알약 버튼 ---------- */
+.btn-light {
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 11px;
+  justify-content: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 9999px;
+  border: 0;
   background: var(--brand);
-  color: #fff;
-  font-family: var(--font-sg);
+  color: var(--btn-ink);
+  font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.02em;
-  border-radius: 0;
-  transition: background-color 0.15s;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+.btn-light:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 @media (hover: hover) {
-  .btn-red:hover:not(:disabled) {
-    background: var(--brand-dark);
-  }
-  .btn-red:hover:not(:disabled) .btn-arrow {
-    transform: translateX(3px);
+  .btn-light:hover:not(:disabled) {
+    background: #fff;
   }
 }
-.btn-red:disabled {
-  opacity: 0.5;
+.glass-input {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
-.btn-arrow {
-  transition: transform 0.2s;
+.glass-input:focus {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.glass-pill {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-line);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
-/* ---------- 얇은 세로 구분선 (통계 줄) ---------- */
-.rule-v {
-  width: 1.5px;
-  align-self: stretch;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.21) 50%, rgba(255, 255, 255, 0.085));
-}
-
-/* ---------- 처음 한 번 나타나는 등장 효과 ---------- */
+/* ---------- 처음 한 번 나타나는 등장 효과 (영상은 움직이지 않고 앞의 글자만 등장한다) ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  .in-fade {
-    animation: in-fade 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
-    animation-delay: var(--d, 0s);
-  }
-  .in-rise {
-    animation: in-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
-    animation-delay: var(--d, 0s);
-  }
-  .in-line > span {
+  .e-line > span {
     display: block;
-    animation: in-line 0.98s cubic-bezier(0.22, 0.85, 0.24, 1) both;
+    animation: lineRise 1.05s var(--e-reveal) both;
     animation-delay: var(--d, 0s);
   }
-  .in-wipe {
-    animation: in-wipe 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  .e-sub {
+    animation: subIn 0.85s var(--e-reveal) both;
+    animation-delay: var(--d, 0s);
+  }
+  .e-pill {
+    animation: pillIn 0.7s var(--e-reveal) both;
+    animation-delay: var(--d, 0s);
+  }
+  .e-lift {
+    animation: liftIn 0.55s var(--e-soft) both;
     animation-delay: var(--d, 0s);
   }
 }
-.in-line {
+.e-line {
   display: block;
   overflow: hidden;
-  padding-bottom: 6px;
-  margin-bottom: -6px;
+  padding-top: 0.26em;
+  margin-top: -0.26em;
 }
-@keyframes in-fade {
+@keyframes lineRise {
   from {
-    opacity: 0;
+    transform: translateY(100%);
   }
   to {
-    opacity: 1;
+    transform: translateY(0);
   }
 }
-@keyframes in-rise {
+@keyframes subIn {
   from {
     opacity: 0;
     transform: translateY(14px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+@keyframes pillIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.972);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-@keyframes in-line {
+@keyframes liftIn {
   from {
-    transform: translateY(120%);
+    opacity: 0;
+    transform: translateY(9px);
   }
   to {
+    opacity: 1;
     transform: none;
-  }
-}
-@keyframes in-wipe {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+    animation: none !important;
   }
 }

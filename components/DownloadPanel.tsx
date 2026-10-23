@@ -68,7 +68,7 @@ export default function DownloadPanel({ report, downloaded, onDownloaded }: Prop
   }
 
   return (
-    <section aria-label="내려받기" className="flex flex-col gap-3 rounded-none border border-black/10 p-4 dark:border-white/20">
+    <section aria-label="내려받기" className="flex flex-col gap-3 rounded-2xl border border-black/10 p-4 dark:border-white/20">
       <p className="text-sm font-medium">워드(.docx) 파일로 내려받습니다. 한글에서도 열 수 있습니다.</p>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -76,7 +76,7 @@ export default function DownloadPanel({ report, downloaded, onDownloaded }: Prop
           type="button"
           onClick={download}
           disabled={busy}
-          className="rounded-none bg-brand px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:bg-brand-dark disabled:opacity-50"
+          className="rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:bg-brand-dark disabled:opacity-50"
         >
           {busy ? "만드는 중…" : "내려받기"}
         </button>

@@ -34,47 +34,40 @@ export default function CountryForm({ onSubmit, disabled = false }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
-      <label htmlFor={inputId} className="font-jb text-sm text-[var(--lab)]">
-        국가명
-      </label>
-      <input
-        id={inputId}
-        type="text"
-        value={value}
-        onChange={(event) => {
-          setValue(event.target.value);
-          if (error) setError(null);
-        }}
-        placeholder="예: 베트남"
-        autoComplete="off"
-        aria-invalid={error ? true : undefined}
-        aria-describedby={messageId}
-        disabled={disabled}
-        className="h-[52px] w-full rounded-none border border-white/30 bg-black/50 px-4 text-base text-white outline-none placeholder:text-white/40 focus:border-white"
-      />
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col items-center gap-3">
+      <div className="flex w-full flex-col gap-2.5 sm:flex-row">
+        <label htmlFor={inputId} className="sr-only">
+          국가명
+        </label>
+        <input
+          id={inputId}
+          type="text"
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value);
+            if (error) setError(null);
+          }}
+          placeholder="국가명 (예: 베트남)"
+          autoComplete="off"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={messageId}
+          disabled={disabled}
+          className="glass-input h-[46px] w-full sm:flex-1 rounded-full px-5 text-center text-[15px] text-white outline-none placeholder:text-white/55 sm:text-left"
+        />
+        <button type="submit" disabled={disabled} className="btn-light sm:w-auto">
+          <span>보고서 생성</span>
+          <svg width="13" height="11" viewBox="0 0 12 10" fill="none" aria-hidden>
+            <path d="M0.8 5h10M7.1 1.4 10.9 5l-3.8 3.6" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
       <p
         id={messageId}
         role={error ? "alert" : undefined}
-        className={
-          error
-            ? "text-sm text-red-400"
-            : "font-jb text-[0.8rem] text-[var(--lab)]"
-        }
+        className={error ? "text-sm text-red-400" : "text-[0.8rem] font-light text-[#cfcfcf]"}
       >
         {error ?? "공개 자료만 사용합니다. 비공개 정보는 입력하지 마세요."}
       </p>
-      <button
-        type="submit"
-        disabled={disabled}
-        className="btn-red h-[52px] w-full max-w-[212px] self-start px-[18px] text-[1.1rem] sm:self-start"
-      >
-        <span>보고서 생성</span>
-        <svg className="btn-arrow" width="21" height="18" viewBox="0 0 21 18" fill="none" stroke="#fff" strokeWidth="2" aria-hidden>
-          <path d="M0 9H20.1" />
-          <path d="M12.1 1L20.1 9L12.1 17" />
-        </svg>
-      </button>
     </form>
   );
 }
