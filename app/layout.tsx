@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import AuthGate from "@/components/AuthGate";
 import "./globals.css";
 
 // 디자인 글꼴: Plus Jakarta Sans. 한글은 들어 있지 않아서 한글은 globals.css의 시스템 한국어 글꼴로 보인다.
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // dark: 화면 전체를 어두운 무대(검정 바탕)로 고정한다. (globals.css의 dark 변형이 이 클래스를 따른다)
     <html lang="ko" className={`${plusJakarta.variable} dark h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }

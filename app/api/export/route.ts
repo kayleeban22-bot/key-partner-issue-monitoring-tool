@@ -2,6 +2,7 @@
 import { buildDocx } from "@/lib/export/docx";
 import { reportFileName } from "@/lib/export/shared";
 import { allowExport, clientIp } from "@/lib/rate-limit";
+import { UNAUTHORIZED_MESSAGE, isAuthenticated } from "@/lib/auth";
 import { guardJsonRequest } from "@/lib/request-guard";
 import { reportSchema } from "@/lib/report/schema";
 import { z } from "zod";
@@ -19,6 +20,10 @@ const MAX_BODY_BYTES = 512 * 1024;
 export async function POST(request: Request) {
   const rejected = guardJsonRequest(request, MAX_BODY_BYTES);
   if (rejected) return rejected;
+  // 비밀번호로 로그인한 사람만 쓸 수 있다.
+  if (!isAuthenticated(request)) {
+    return Response.json({ message: UNAUTHORIZED_MESSAGE }, { status: 401 });
+  }
   if (!allowExport(clientIp(request))) {
     return Response.json({ message: "짧은 시간에 너무 많이 요청했습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
   }
