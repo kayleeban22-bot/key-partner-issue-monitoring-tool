@@ -70,9 +70,10 @@ export async function POST(request: Request) {
   // 이름이 여러 나라에 해당하면(예: 콩고) 엉뚱한 나라의 보고서가 만들어지지 않도록, 만들기 전에 정확한 이름을 묻는다.
   const lookup = lookupCountry(country);
   if (lookup.kind === "ambiguous") {
-    const names = candidateNames(lookup.candidates).join(", ");
+    const names = candidateNames(lookup.candidates);
+    // suggestions: 화면이 버튼으로 보여 주는 후보 이름. 누르면 그 이름으로 바로 보고서를 만든다.
     return Response.json(
-      { message: `"${country}"은(는) 여러 나라에 해당합니다. 정확한 국가 이름으로 다시 입력해 주세요. (${names})` },
+      { message: `"${country}"은(는) 여러 나라에 해당합니다. 아래에서 만들 국가를 골라 주세요.`, suggestions: names },
       { status: 400 },
     );
   }

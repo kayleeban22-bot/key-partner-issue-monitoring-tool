@@ -13,8 +13,8 @@ type ViewState =
   | { kind: "idle" }
   | { kind: "running"; country: string; current: ProgressStep | null }
   | { kind: "done"; report: Report }
-  // country: 다시 시도할 때 쓸 국가명
-  | { kind: "error"; message: string; country: string };
+  // country: 다시 시도할 때 쓸 국가명, suggestions: 이름이 여러 나라에 해당할 때 고를 수 있는 후보 이름
+  | { kind: "error"; message: string; country: string; suggestions: string[] };
 
 const CONFIRM_REPLACE =
   "아직 내려받지 않은 보고서가 있습니다. 새로 만들면 지금 보고서는 사라집니다. 계속할까요?";
@@ -66,14 +66,19 @@ export default function Home() {
         error instanceof ReportRequestError
           ? error.message
           : "보고서를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
-      setView({ kind: "error", message, country });
+      setView({
+        kind: "error",
+        message,
+        country,
+        suggestions: error instanceof ReportRequestError ? error.suggestions : [],
+      });
     }
   }
 
   function handleCancel() {
     if (view.kind !== "running") return;
     abortRef.current?.abort();
-    setView({ kind: "error", message: "보고서 만들기를 취소했습니다.", country: view.country });
+    setView({ kind: "error", message: "보고서 만들기를 취소했습니다.", country: view.country, suggestions: [] });
   }
 
   return (
@@ -105,13 +110,29 @@ export default function Home() {
             className="flex flex-col gap-3 rounded-xl border border-red-300 bg-red-50 p-5 text-sm text-red-900 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100"
           >
             <p>{view.message}</p>
-            <button
-              type="button"
-              onClick={() => handleSubmit(view.country)}
-              className="self-start rounded-md bg-foreground px-3 py-1.5 font-medium text-background hover:opacity-85"
-            >
-              {view.country} 다시 시도
-            </button>
+            {view.suggestions.length > 0 ? (
+              // 이름이 여러 나라에 해당하면 같은 이름을 다시 보내는 [다시 시도] 대신, 후보를 골라 바로 만들게 한다.
+              <div className="flex flex-wrap gap-2">
+                {view.suggestions.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => handleSubmit(name)}
+                    className="rounded-md bg-foreground px-3 py-1.5 font-medium text-background hover:opacity-85"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSubmit(view.country)}
+                className="self-start rounded-md bg-foreground px-3 py-1.5 font-medium text-background hover:opacity-85"
+              >
+                {view.country} 다시 시도
+              </button>
+            )}
           </section>
         )}
 
