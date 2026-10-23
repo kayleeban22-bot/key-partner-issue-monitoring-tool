@@ -139,9 +139,7 @@ export function withTopicMarker(name: string): string {
 // 달러 금액을 원문 그대로 적는다. (FDI 유출처럼 부호는 문장에서 따로 말하므로 절댓값을 쓴다)
 export const formatUsd = (value: number) => `${exact(Math.abs(value))}달러`;
 
-// 백분율은 소수 둘째 자리까지만 보인다. (세계은행이 소수 14자리 정도로 주는 값을 읽기 좋게 줄인 것이며, 보고서에 안내 문구를 붙인다)
-export const formatPercent = (value: number) => `${exact(Number(value.toFixed(2)))}%`;
-const PERCENT_NOTE = "백분율은 소수 둘째 자리까지 표시";
+export const formatPercent = (value: number) => `${exact(value)}%`;
 
 // ---------- 공개 API 호출 ----------
 
@@ -353,16 +351,13 @@ export async function fetchOpenData(
     .filter((date): date is string => date !== null)
     .sort();
 
-  // 세계은행 백분율 문장(성장률·물가상승률)이 있으면 반올림해 표시했다는 안내를 붙인다.
-  const hasWbPercent = (growth.status === "fulfilled" && growth.value.values.length > 0) || cpi !== null;
-
   if (wbDraft.length > 0) {
     // 세계은행이 알려 주는 자료 갱신일을 발행일로 쓰고, 12개월이 넘었으면 "과거 자료"로 표시한다.
     const wbDate = updates[updates.length - 1] ?? today;
     sources.push({
       id: sources.length + 1,
       org: "World Bank",
-      title: `World Development Indicators — ${info.name}${hasWbPercent ? ` (${PERCENT_NOTE})` : ""}`,
+      title: `World Development Indicators — ${info.name}`,
       date: wbDate,
       url: `https://data.worldbank.org/country/${iso2.toLowerCase()}`,
       isOld: isOlderThanTwelveMonths(wbDate, now),
@@ -383,8 +378,5 @@ export async function fetchOpenData(
 
   const missing = [population, gdp, perCapita, growth, fdi, inflation, imfGrowth, imfInflation].filter((r) => r.status === "rejected").length;
   const notes = missing > 0 ? [`공개 통계 지표 ${missing}개를 불러오지 못해 빠졌습니다.`] : [];
-  if (hasWbPercent) {
-    notes.push("세계은행 통계의 백분율(성장률·물가상승률)은 읽기 쉽도록 소수 둘째 자리까지만 표시했습니다. 나머지 숫자는 원문 그대로입니다.");
-  }
   return { status: "ok", sources, pieces, notes };
 }
