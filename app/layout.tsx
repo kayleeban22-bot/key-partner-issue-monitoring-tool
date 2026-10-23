@@ -12,7 +12,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "경제협력 모니터링 보고 도구",
+  title: "주요 협력국 현안 모니터링 툴",
   description: "국가를 입력하면 공개 자료를 조사·요약해 표준 양식의 보고서를 만들어 줍니다",
 };
 
