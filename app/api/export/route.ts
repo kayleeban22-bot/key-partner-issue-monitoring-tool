@@ -8,7 +8,7 @@ import { z } from "zod";
 
 const requestSchema = z.object({
   report: reportSchema,
-  format: z.enum(["docx", "hwpx"]),
+  format: z.literal("docx"), // 한글(.hwpx)은 만들지 않는다. 워드 파일을 한글에서 열 수 있다.
 });
 
 const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -38,14 +38,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { report, format } = parsed.data;
-
-  if (format === "hwpx") {
-    return Response.json(
-      { message: "한글(.hwpx) 내려받기는 한글에서 열리는지 확인이 끝나지 않아 아직 쓸 수 없습니다. 워드(.docx)로 받아 한글에서 열 수 있습니다." },
-      { status: 501 },
-    );
-  }
+  const { report } = parsed.data;
 
   try {
     const file = await buildDocx(report);

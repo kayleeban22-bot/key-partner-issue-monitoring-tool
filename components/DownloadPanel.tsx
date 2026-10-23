@@ -1,12 +1,10 @@
 "use client";
 
-// Design Ref: §2.3 — 형식을 고르고 [내려받기]를 누르면 지금 화면의(수정한) 보고서를 파일로 받는다.
+// Design Ref: §2.3 — [내려받기]를 누르면 지금 화면의(수정한) 보고서를 워드(.docx) 파일로 받는다.
 // 서버에는 저장하지 않으므로 내려받기가 유일한 저장 수단이다.
-// 한글(.hwpx)은 한글에서 열리는지 확인이 끝나기 전까지 막아 두고, 기본 형식은 워드(.docx)로 한다.
-import { useId, useState } from "react";
+// 한글(.hwpx)은 따로 만들지 않는다. 워드 파일을 한글에서 열 수 있다.
+import { useState } from "react";
 import type { Report } from "@/lib/report/types";
-
-type Format = "docx" | "hwpx";
 
 // 서버가 보낸 Content-Disposition에서 파일 이름을 꺼낸다. (없으면 국가명으로 만든다)
 function fileNameFrom(header: string | null, fallback: string): string {
@@ -29,10 +27,8 @@ type Props = {
 };
 
 export default function DownloadPanel({ report, downloaded, onDownloaded }: Props) {
-  const [format, setFormat] = useState<Format>("docx");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const groupId = useId();
 
   async function download() {
     setBusy(true);
@@ -41,7 +37,7 @@ export default function DownloadPanel({ report, downloaded, onDownloaded }: Prop
       const response = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report, format }),
+        body: JSON.stringify({ report, format: "docx" }),
       });
       if (!response.ok) {
         let message = "파일을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -58,7 +54,7 @@ export default function DownloadPanel({ report, downloaded, onDownloaded }: Prop
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = fileNameFrom(response.headers.get("Content-Disposition"), `${report.country}.${format}`);
+      link.download = fileNameFrom(response.headers.get("Content-Disposition"), `${report.country}.docx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -73,19 +69,7 @@ export default function DownloadPanel({ report, downloaded, onDownloaded }: Prop
 
   return (
     <section aria-label="내려받기" className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
-      <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <legend id={groupId} className="mb-1 text-sm font-medium">
-          파일 형식
-        </legend>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="radio" name={groupId} checked={format === "docx"} onChange={() => setFormat("docx")} />
-          워드(.docx)
-        </label>
-        <label className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-          <input type="radio" name={groupId} checked={format === "hwpx"} disabled onChange={() => setFormat("hwpx")} />
-          한글(.hwpx) — 준비 중
-        </label>
-      </fieldset>
+      <p className="text-sm font-medium">워드(.docx) 파일로 내려받습니다. 한글에서도 열 수 있습니다.</p>
 
       <div className="flex flex-wrap items-center gap-3">
         <button

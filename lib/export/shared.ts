@@ -7,7 +7,7 @@ export function cleanText(text: string): string {
 }
 
 // 내려받을 파일 이름. 파일 이름에 쓸 수 없는 문자는 밑줄로 바꾼다.
-export function reportFileName(report: Report, extension: "docx" | "hwpx"): string {
+export function reportFileName(report: Report, extension: "docx"): string {
   const base = `${cleanText(report.country)}_경제협력_현황_보고`.replace(/[\\/:*?"<>|\s]+/g, "_");
   return `${base}.${extension}`;
 }
