@@ -70,6 +70,7 @@
 | 보안 6번 | 출처 링크 종류 제한 없음 | http·https만 허용 |
 | 보안 7번 | OpenAI에 입력 기록 저장 | `store: false` 추가 |
 | 별도 | 워드가 4~5쪽으로 넘침 | 줄 간격 18pt 고정, 출처 목록 9pt, 쪽수 추정식 보정 |
+| 별도 | 공개 주소의 무단 사용 | `.env`의 `APP_PASSWORD` 비밀번호 잠금 추가(서버가 보고서·내려받기를 막음, 틀린 횟수 제한, 로그아웃) |
 | 별도 | "콩고" 같은 모호한 국가명 | 생성 전에 정확한 이름을 안내 |
 
 모두 `main`에 병합했고 공개 주소(https://my-app-xi-navy.vercel.app)에 배포했다. 코드는 GitHub 저장소(https://github.com/kayleeban22-bot/key-partner-issue-monitoring-tool)에 올라가 있고, `main`에 푸시하면 Vercel이 자동으로 다시 배포한다. 배포 후 공개 주소에서 보안 헤더, 415/400 거절, 실제 보고서 생성(16초)을 확인했다.
