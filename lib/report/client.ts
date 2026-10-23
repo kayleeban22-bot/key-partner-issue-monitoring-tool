@@ -4,9 +4,13 @@ import type { ProgressStep, Report, StreamChunk } from "./types";
 
 // 화면에 그대로 보여 줘도 되는 쉬운 문구를 message에 담는다.
 export class ReportRequestError extends Error {
-  constructor(message: string) {
+  // 이름이 여러 나라에 해당할 때 서버가 알려 주는 후보 국가 이름. 화면이 선택 버튼으로 보여 준다.
+  readonly suggestions: string[];
+
+  constructor(message: string, suggestions: string[] = []) {
     super(message);
     this.name = "ReportRequestError";
+    this.suggestions = suggestions;
   }
 }
 
@@ -35,13 +39,17 @@ export async function requestReport(country: string, options: Options): Promise<
   if (!response.ok || !response.body) {
     // 서버가 입력을 거절하면 { message }를 돌려준다.
     let message = "보고서를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    let suggestions: string[] = [];
     try {
-      const data = (await response.json()) as { message?: string };
+      const data = (await response.json()) as { message?: string; suggestions?: unknown };
       if (data.message) message = data.message;
+      if (Array.isArray(data.suggestions)) {
+        suggestions = data.suggestions.filter((item): item is string => typeof item === "string").slice(0, 6);
+      }
     } catch {
       // 본문이 JSON이 아니면 기본 문구를 쓴다.
     }
-    throw new ReportRequestError(message);
+    throw new ReportRequestError(message, suggestions);
   }
 
   const reader = response.body.getReader();
