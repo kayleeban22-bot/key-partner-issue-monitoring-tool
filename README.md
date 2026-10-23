@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 경제협력 모니터링 보고 도구
 
-## Getting Started
+국가명 하나를 입력하면 공개 자료를 조사·요약해, 재정경제부 대외경제국의 **표준 양식 내부 보고서**(A4 2~3쪽)를 만들어 주는 웹 도구입니다. 담당자가 화면에서 내용을 확인·수정한 뒤 **워드(.docx)** 파일로 내려받습니다.
 
-First, run the development server:
+- **접속 주소**: https://my-app-xi-navy.vercel.app (로그인 없이 사용)
+- **기획서**: [PRD.md](PRD.md) · **계획서**: [PLAN.md](PLAN.md) · **설계서**: [DESIGN.md](DESIGN.md) · **점검 결과**: [CHECK.md](CHECK.md)
+
+## 해결하려는 문제
+
+경제협력 아젠다를 발굴하고 세계 현안을 모니터링하는 담당자는 자료를 찾고 읽고 정리해 보고서를 만드는 데 시간이 많이 듭니다. 담당자마다 보고서의 목차와 깊이도 달라집니다. 이 도구는 자료 수집·요약·양식 맞추기를 맡고, 담당자는 내용 확인과 분석에 시간을 쓰게 합니다.
+
+## 사용 방법
+
+1. 국가명을 입력하고 **보고서 만들기**를 누릅니다. (한 번에 한 국가, 보통 10~30초)
+2. 화면에 6개 항목으로 정리된 보고서와 출처 목록이 나옵니다. 자료가 없는 항목은 "공개 자료 없음"으로 표시되고, 맨 위에 별도 안내가 뜹니다.
+3. 항목마다 **수정**을 눌러 문장을 고칩니다.
+4. **내려받기**로 워드 파일을 받습니다. 서버에는 아무것도 저장되지 않으므로 내려받기가 유일한 저장 수단입니다.
+
+이름이 여러 나라에 해당하면(예: 콩고) 후보 국가 버튼이 나와 고를 수 있습니다.
+
+## 보고서의 모양
+
+표준 목차 6개 항목의 순서와 이름을 항상 따릅니다.
+
+1. 간략한 국가 개요
+2. 정치 동향 (지정학적 위치 및 이슈, 대외관계, 정치동향)
+3. 경제 동향 (국영기업 해외 투자 프로젝트, 경제동향 및 전망, GDP·FDI 등)
+4. 주요 산업 현황 및 정책
+5. 우리나라와의 관계 (교역현황, 수주 및 투자 현황, 전략적 중요성)
+6. 경제외교 현황 (주요 MOU 체결 현황)
+
+## 신뢰할 수 있게 만드는 규칙
+
+- 핵심 주장(숫자나 사실을 담은 문장)마다 **출처**(기관명·제목·날짜·링크)를 붙입니다.
+- 발행일이 12개월을 넘은 자료는 **"과거 자료"** 로 표시합니다.
+- 숫자는 원문 그대로 옮깁니다. AI가 쓴 문장은 코드가 원문과 다시 대조하고, 맞지 않으면 뺍니다.
+- 자료가 없으면 지어내지 않고 "공개 자료 없음"으로 둡니다. 분량이 2쪽에 못 미치면 경고만 합니다.
+- 연락처·주소 같은 사적 정보와 "초안" 같은 문구는 넣지 않습니다.
+- 공개 자료만 사용합니다. 기밀·비공개 문서는 입력하지 않습니다.
+
+## 자료는 어디서 가져오나
+
+- **숫자 위주 항목**(인구·GDP·성장률·외국인직접투자·물가): 세계은행·IMF 무료 공개 통계를 코드가 직접 문장으로 만듭니다.
+- **문장형 자료**(정치·산업·한국과의 관계 등): OpenAI의 웹 검색으로 국제기구·한국 정부·연구기관·주요 언론에서 찾아 요약합니다.
+- OpenAI를 쓸 수 없을 때(이용 한도 소진 등)에도 공개 통계만으로 보고서를 만들고, 그 사실을 화면에 알립니다.
+
+## 기술 구성
+
+- Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4
+- 서버 API: 보고서 생성(`app/api/report`, 진행 상황을 한 줄씩 흘려 보냄), 워드 파일 생성(`app/api/export`)
+- 검증: zod (입력·보고서 구조), docx (워드 파일 만들기)
+- 배포: Vercel
+
+## 직접 실행하기
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# 프로젝트 폴더에 .env 파일을 만들고 아래 표의 키를 적습니다
+npm run dev            # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env`에 필요한 값은 하나입니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| 이름 | 용도 |
+|---|---|
+| `OPENAI_API_KEY` | 자료 검색·요약에 쓰는 OpenAI API 키 (서버에서만 읽음) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+키는 절대 코드나 문서에 적지 않습니다. `.env`는 Git에 올라가지 않습니다. 키가 없으면 공개 통계만으로 보고서를 만듭니다.
 
-## Learn More
+```bash
+npm run lint    # 코드 검사
+npm run build   # 배포용 빌드
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 안전장치
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- 같은 접속 주소는 10분에 6건까지, 동시에 만드는 보고서 수도 제한합니다. (로그인이 없는 공개 서비스라 사용료 남용을 줄이기 위함)
+- 다른 사이트에서 몰래 보낸 요청을 거절하고, 기본 보안 헤더를 붙입니다.
+- 보고서와 입력 기록을 서버에 저장하지 않습니다. OpenAI에도 요청 내용을 저장하지 않도록 설정합니다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 한계
 
-## Deploy on Vercel
+- 연 단위 공개 통계라 올해의 분기·월 속보는 AI 검색 결과에 의존합니다.
+- AI 웹 검색은 정해 둔 신뢰 도메인 안에서만 찾습니다. 해당국 정부·통계청과 현지 언론은 직접 검색하지 않습니다.
+- 한글(.hwpx) 파일은 만들지 않습니다. 워드 파일을 한글에서 열 수 있습니다.
+- 담당자가 직접 고친 문장은 출처와 사적 정보를 다시 검사하지 않으므로, 최종 내용은 담당자가 확인해야 합니다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 문서
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| 문서 | 내용 |
+|---|---|
+| [PRD.md](PRD.md) | 서비스 기획서 (문제 정의, 목표, 기능, 범위, 보안) |
+| [PLAN.md](PLAN.md) | 성공 기준과 작업 계획 |
+| [DESIGN.md](DESIGN.md) | 화면·데이터 흐름·기술 설계 |
+| [CHECK.md](CHECK.md) | 성공 기준 점검과 남은 개선점 |
+| [CLAUDE.md](CLAUDE.md) | AI 개발 도구가 따르는 프로젝트 규칙 |
+
+작성: 반주현 · 2026-10
