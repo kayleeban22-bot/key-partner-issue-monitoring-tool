@@ -143,9 +143,9 @@ export const formatPercent = (value: number) => `${exact(value)}%`;
 
 // ---------- 공개 API 호출 ----------
 
-async function getJson(url: string, signal: AbortSignal | undefined): Promise<unknown> {
+async function getJson(url: string, signal: AbortSignal | undefined, headers?: Record<string, string>): Promise<unknown> {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+  const response = await fetch(url, { headers, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
@@ -204,8 +204,28 @@ async function loadWbIndicator(
   return { values, updated: /^\d{4}-\d{2}-\d{2}$/.test(data[0]?.lastupdated ?? "") ? (data[0].lastupdated as string) : null };
 }
 
-// IMF DataMapper의 연도별 전망값
-async function loadImf(indicator: string, iso3: string, signal: AbortSignal | undefined): Promise<YearValue[]> {
+// IMF 새 데이터 서비스(SDMX)의 연도별 전망값. WEO 최신판이고 소수 6자리까지 준다.
+// 옛 DataMapper 주소는 공개 주소(Vercel 서버)에서 IMF가 403으로 거부해서, 이 주소를 먼저 쓴다.
+async function loadImfSdmx(indicator: string, iso3: string, fromYear: number, signal: AbortSignal | undefined): Promise<YearValue[]> {
+  const url = `https://api.imf.org/external/sdmx/2.1/data/IMF.RES,WEO/${iso3}.${indicator}.A?startPeriod=${fromYear}&endPeriod=${fromYear + 2}`;
+  const data = (await getJson(url, signal, { Accept: "application/json" })) as {
+    dataSets?: { series?: Record<string, { observations?: Record<string, (string | null)[]> }> }[];
+    structure?: { dimensions?: { observation?: { id: string; values: { id: string }[] }[] } };
+  };
+  const periods = data.structure?.dimensions?.observation?.find((dimension) => dimension.id === "TIME_PERIOD")?.values ?? [];
+  const series = Object.values(data.dataSets?.[0]?.series ?? {})[0];
+  if (!series?.observations) return [];
+  const result: YearValue[] = [];
+  for (const [index, cells] of Object.entries(series.observations)) {
+    const year = Number(periods[Number(index)]?.id);
+    const value = Number(cells?.[0]);
+    if (Number.isFinite(year) && cells?.[0] != null && Number.isFinite(value)) result.push({ year, value });
+  }
+  return result;
+}
+
+// IMF DataMapper의 연도별 전망값 (새 서비스가 실패할 때의 대비)
+async function loadImfDataMapper(indicator: string, iso3: string, signal: AbortSignal | undefined): Promise<YearValue[]> {
   const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}/${iso3}`;
   const data = (await getJson(url, signal)) as { values?: Record<string, Record<string, Record<string, number>>> };
   const series = data.values?.[indicator]?.[iso3];
@@ -213,6 +233,16 @@ async function loadImf(indicator: string, iso3: string, signal: AbortSignal | un
   return Object.entries(series)
     .filter(([year, value]) => Number.isFinite(Number(year)) && typeof value === "number")
     .map(([year, value]) => ({ year: Number(year), value }));
+}
+
+async function loadImf(indicator: string, iso3: string, fromYear: number, signal: AbortSignal | undefined): Promise<YearValue[]> {
+  try {
+    const values = await loadImfSdmx(indicator, iso3, fromYear, signal);
+    if (values.length > 0) return values;
+  } catch {
+    // 새 서비스가 안 되면 아래 DataMapper로 시도한다.
+  }
+  return loadImfDataMapper(indicator, iso3, signal);
 }
 
 // ---------- 문장 만들기 ----------
@@ -275,8 +305,8 @@ export async function fetchOpenData(
     wb("NY.GDP.MKTP.KD.ZG"),
     wb("BX.KLT.DINV.CD.WD"),
     wb("FP.CPI.TOTL.ZG"),
-    loadImf("NGDP_RPCH", info.iso3, options.signal),
-    loadImf("PCPIPCH", info.iso3, options.signal),
+    loadImf("NGDP_RPCH", info.iso3, now.getUTCFullYear(), options.signal),
+    loadImf("PCPIPCH", info.iso3, now.getUTCFullYear(), options.signal),
   ]);
 
   const latest = (result: PromiseSettledResult<{ values: YearValue[] }>): YearValue | null =>
@@ -368,7 +398,7 @@ export async function fetchOpenData(
     sources.push({
       id: sources.length + 1,
       org: "IMF",
-      title: `World Economic Outlook 전망 데이터(DataMapper, 조회일 기준) — ${info.name}`,
+      title: `World Economic Outlook 전망 데이터(조회일 기준) — ${info.name}`,
       date: today, // DataMapper는 발행일을 알려 주지 않아 조회일을 적는다
       url: `https://www.imf.org/external/datamapper/profile/${info.iso3}`,
       isOld: false,
