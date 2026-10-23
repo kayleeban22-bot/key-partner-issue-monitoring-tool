@@ -3,6 +3,7 @@
 // AI를 쓸 수 없을 때(이용 한도 소진 등)에도 공개 통계만으로 보고서를 만든다.
 import { ConfigError } from "@/lib/config";
 import { admit, clientIp } from "@/lib/rate-limit";
+import { UNAUTHORIZED_MESSAGE, isAuthenticated } from "@/lib/auth";
 import { guardJsonRequest } from "@/lib/request-guard";
 import { composeReport } from "@/lib/report/compose";
 import { candidateNames, fetchOpenData, lookupCountry } from "@/lib/report/opendata";
@@ -50,6 +51,10 @@ function failureReason(error: KnownError): string {
 export async function POST(request: Request) {
   const rejected = guardJsonRequest(request, 2_000);
   if (rejected) return rejected;
+  // 비밀번호로 로그인한 사람만 쓸 수 있다.
+  if (!isAuthenticated(request)) {
+    return Response.json({ message: UNAUTHORIZED_MESSAGE }, { status: 401 });
+  }
 
   let body: unknown;
   try {

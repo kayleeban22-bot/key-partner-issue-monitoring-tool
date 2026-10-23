@@ -15,6 +15,8 @@ const hits = new Map<string, number[]>();
 let running = 0;
 const runningByIp = new Map<string, number>();
 const exportHits = new Map<string, number[]>();
+const loginFailures = new Map<string, number[]>();
+const LOGIN_MAX_FAILURES = 5; // 같은 주소에서 10분에 5번 틀리면 잠깐 막는다 (무차별 대입 방지)
 
 export type Admission = { ok: true; release: () => void } | { ok: false; message: string };
 
@@ -86,4 +88,25 @@ export function admit(ip: string, now = Date.now()): Admission {
       else runningByIp.set(ip, left);
     },
   };
+}
+
+// 비밀번호 시도 제한: 틀린 횟수만 센다. 막힌 동안에는 맞는 비밀번호도 받지 않는다.
+export function canTryLogin(ip: string, now = Date.now()): boolean {
+  const recent = (loginFailures.get(ip) ?? []).filter((time) => now - time < WINDOW_MS);
+  return recent.length < LOGIN_MAX_FAILURES;
+}
+
+export function recordLoginFailure(ip: string, now = Date.now()): void {
+  const recent = (loginFailures.get(ip) ?? []).filter((time) => now - time < WINDOW_MS);
+  recent.push(now);
+  loginFailures.set(ip, recent);
+  if (loginFailures.size > MAX_TRACKED_IPS) {
+    for (const [key, times] of loginFailures) {
+      if (times.every((time) => now - time >= WINDOW_MS)) loginFailures.delete(key);
+    }
+  }
+}
+
+export function clearLoginFailures(ip: string): void {
+  loginFailures.delete(ip);
 }
