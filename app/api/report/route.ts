@@ -6,6 +6,7 @@ import { admit, clientIp } from "@/lib/rate-limit";
 import { guardJsonRequest } from "@/lib/request-guard";
 import { composeReport } from "@/lib/report/compose";
 import { candidateNames, fetchOpenData, lookupCountry } from "@/lib/report/opendata";
+import { dropOverlaps } from "@/lib/report/overlap";
 import { OpenAIError } from "@/lib/report/openai";
 import { applyRules } from "@/lib/report/rules";
 import { countryInputSchema } from "@/lib/report/schema";
@@ -131,6 +132,13 @@ export async function POST(request: Request) {
 
         const open = await openPromise;
         notes.unshift(...open.notes);
+
+        // 공개 통계가 이미 알려 주는 지표(인구·GDP 규모·1인당 GDP·IMF 전망)를 AI 문장이 다시 말하면 숫자가 어긋날 수 있어 AI 문장을 뺀다.
+        const overlap = dropOverlaps(aiPieces, open.pieces);
+        aiPieces = overlap.pieces;
+        if (overlap.removed > 0) {
+          notes.push(`공개 통계와 같은 지표를 다른 숫자로 말하는 AI 검색 문장 ${overlap.removed}개를 뺐습니다. (공개 통계 값을 우선합니다)`);
+        }
 
         // 공개 통계도 AI 자료도 없는데 AI가 실패했다면, 그 오류를 그대로 알린다.
         if (open.pieces.length === 0 && aiPieces.length === 0 && aiFailure) throw aiFailure;
