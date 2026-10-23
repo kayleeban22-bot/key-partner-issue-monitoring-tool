@@ -7,6 +7,14 @@ import { EMPTY_SECTION_TEXT, SECTION_OUTLINE } from "./outline";
 export { EMPTY_SECTION_TEXT, SECTION_OUTLINE };
 
 // 발행일은 있는 만큼만 적는다: "2026", "2026-03", "2026-03-01"
+// 공개 주소의 /api/export가 받는 보고서의 크기 상한. 정상 보고서보다 훨씬 넉넉하게 두되, 터무니없이 큰 요청은 막는다.
+// Design Ref: §3.2 ① — 국가명은 50자까지 받는다. (reportSchema의 country 상한에도 쓰므로 위에 둔다)
+export const MAX_COUNTRY_LENGTH = 50;
+const MAX_TEXT = 1000;
+const MAX_SHORT = 300;
+const MAX_SENTENCES_PER_SUBSECTION = 100;
+const MAX_SOURCES = 100;
+
 const publishedDateSchema = z
   .string()
   .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, "발행일은 YYYY, YYYY-MM, YYYY-MM-DD 중 하나여야 합니다");
@@ -16,16 +24,17 @@ export const sectionNoSchema = z.literal([1, 2, 3, 4, 5, 6]);
 
 export const sourceSchema = z.object({
   id: z.number().int().positive(), // 본문의 [1] 번호
-  org: z.string().min(1), // 기관명
-  title: z.string().min(1),
+  org: z.string().min(1).max(MAX_SHORT), // 기관명
+  title: z.string().min(1).max(MAX_SHORT),
   date: publishedDateSchema,
-  url: z.url(),
+  // http·https 주소만 허용한다. (javascript:, file: 같은 주소가 워드 링크로 들어가는 것을 막는다)
+  url: z.url({ protocol: /^https?$/ }).max(2000),
   isOld: z.boolean(), // 보고서 생성일 기준 12개월 초과면 true → "과거 자료" 표시
 });
 
 // 서버 안에서만 쓴다. 숫자를 원문과 대조하려고 발췌를 함께 들고 있고, 브라우저로는 보내지 않는다.
 export const rawSourceSchema = sourceSchema.extend({
-  excerpt: z.string(),
+  excerpt: z.string().max(2000),
   topic: sectionNoSchema, // 이 자료가 쓰일 표준 목차 항목 번호
 });
 
@@ -40,21 +49,21 @@ export const summaryPieceSchema = z.object({
 });
 
 export const sentenceSchema = z.object({
-  text: z.string().min(1),
-  sourceIds: z.array(z.number().int().positive()),
+  text: z.string().min(1).max(MAX_TEXT),
+  sourceIds: z.array(z.number().int().positive()).max(20),
   // 숫자나 사실을 담은 문장(핵심 주장). true면 sourceIds가 비어 있으면 안 된다.
   isKeyClaim: z.boolean(),
 });
 
 export const subsectionSchema = z.object({
-  title: z.string().min(1),
-  sentences: z.array(sentenceSchema),
+  title: z.string().min(1).max(MAX_SHORT),
+  sentences: z.array(sentenceSchema).max(MAX_SENTENCES_PER_SUBSECTION),
 });
 
 
 export const sectionSchema = z.object({
   no: sectionNoSchema,
-  title: z.string().min(1), // 표준 목차 이름 (고정)
+  title: z.string().min(1).max(MAX_SHORT), // 표준 목차 이름 (고정)
   // 자료가 없는 항목(isEmpty)은 빈 배열이고, 화면·파일에서 EMPTY_SECTION_TEXT 한 줄만 보여 준다.
   subsections: z.array(subsectionSchema),
   isEmpty: z.boolean(),
@@ -62,13 +71,13 @@ export const sectionSchema = z.object({
 
 export const reportSchema = z
   .object({
-    title: z.string().min(1), // 예: "베트남 경제협력 현황 보고"
-    country: z.string().min(1),
+    title: z.string().min(1).max(MAX_SHORT), // 예: "베트남 경제협력 현황 보고"
+    country: z.string().min(1).max(MAX_COUNTRY_LENGTH),
     createdAt: z.iso.datetime(),
     sections: z.array(sectionSchema).length(6), // 항상 6개, 표준 순서
-    sources: z.array(sourceSchema),
+    sources: z.array(sourceSchema).max(MAX_SOURCES),
     emptySectionNos: z.array(sectionNoSchema), // 담당자에게 따로 알릴 빈 항목 (파일에는 넣지 않음)
-    warnings: z.array(z.string()), // 예: "자료가 적어 2쪽에 못 미침" (파일에는 넣지 않음)
+    warnings: z.array(z.string().max(MAX_TEXT)).max(50), // 예: "자료가 적어 2쪽에 못 미침" (파일에는 넣지 않음)
   })
   .superRefine((report, ctx) => {
     // Plan SC: S2 — 표준 목차의 순서·이름·하위 항목을 그대로 따르는지 확인한다.
@@ -152,7 +161,6 @@ export const reportSchema = z
   });
 
 // Design Ref: §3.2 ① — 서버가 받는 입력. 국가명 한 줄만 받고, 길이와 문자를 제한한다.
-export const MAX_COUNTRY_LENGTH = 50;
 
 export const countryInputSchema = z.object({
   country: z

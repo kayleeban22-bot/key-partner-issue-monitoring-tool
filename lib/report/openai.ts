@@ -59,7 +59,8 @@ export async function callOpenAI(
   // 기다리는 시간까지 합쳐 전체 제한 시간 안에 끝내야 한다.
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
-  const payload = JSON.stringify(body);
+  // store: false — 입력한 국가명과 생성 내용을 OpenAI 쪽에 저장하지 않게 한다. ("입력 기록은 저장하지 않는다" 원칙)
+  const payload = JSON.stringify({ ...(body as object), store: false });
 
   for (let attempt = 0; ; attempt += 1) {
     const response = await fetch("https://api.openai.com/v1/responses", {
