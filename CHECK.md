@@ -1,4 +1,4 @@
-# CHECK — 경제협력 모니터링 보고 도구 점검 결과
+# CHECK — 주요 협력국 현안 모니터링 툴 점검 결과
 
 > **기준 문서**: `PLAN.md`(성공 기준 S1~S9) · `DESIGN.md`(설계) · **최종 갱신**: 2026-10-23 · **점검 대상**: `main` (공개 주소에 배포된 최신 버전, GitHub 푸시 시 자동 배포)
 
@@ -72,7 +72,7 @@
 | 별도 | 워드가 4~5쪽으로 넘침 | 줄 간격 18pt 고정, 출처 목록 9pt, 쪽수 추정식 보정 |
 | 별도 | "콩고" 같은 모호한 국가명 | 생성 전에 정확한 이름을 안내 |
 
-모두 `main`에 병합했고 공개 주소(https://my-app-xi-navy.vercel.app)에 배포했다. 코드는 GitHub 저장소(https://github.com/kayleeban22-bot/economic-cooperation-report)에 올라가 있고, `main`에 푸시하면 Vercel이 자동으로 다시 배포한다. 배포 후 공개 주소에서 보안 헤더, 415/400 거절, 실제 보고서 생성(16초)을 확인했다.
+모두 `main`에 병합했고 공개 주소(https://my-app-xi-navy.vercel.app)에 배포했다. 코드는 GitHub 저장소(https://github.com/kayleeban22-bot/key-partner-issue-monitoring-tool)에 올라가 있고, `main`에 푸시하면 Vercel이 자동으로 다시 배포한다. 배포 후 공개 주소에서 보안 헤더, 415/400 거절, 실제 보고서 생성(16초)을 확인했다.
 
 ## 성공 기준별 판정
 

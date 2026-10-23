@@ -98,7 +98,7 @@ export default function Home() {
 
         <header className="absolute inset-x-0 top-0 z-10 flex h-16 items-center justify-between px-6 sm:px-10">
           <span className="e-lift text-[1.35rem] font-extrabold leading-none tracking-tight" style={{ ["--d" as string]: "0.46s" }}>
-            경제협력 보고
+            협력국 현안 모니터링
           </span>
           <span
             className="glass-pill e-pill rounded-full px-4 py-1.5 text-[0.8rem] font-medium text-[#d9d9d9]"
@@ -111,10 +111,10 @@ export default function Home() {
         <section aria-label="국가 입력" className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-5 pb-10 pt-20 text-center">
           <h1 className="m-0 break-keep text-[clamp(2.7rem,8.4vw,5.6rem)] font-medium leading-[1.04] tracking-[-0.02em]">
             <span className="e-line" style={{ ["--d" as string]: "0.12s" }}>
-              <span>경제협력</span>
+              <span>주요 협력국</span>
             </span>
             <span className="e-line" style={{ ["--d" as string]: "0.22s" }}>
-              <span>모니터링 보고 도구</span>
+              <span>현안 모니터링 툴</span>
             </span>
           </h1>
           <p className="e-sub mt-5 max-w-[34rem] break-keep text-[clamp(0.98rem,2.4vw,1.1rem)] font-light leading-[1.7] text-[#f6f6f6]" style={{ ["--d" as string]: "0.58s" }}>
