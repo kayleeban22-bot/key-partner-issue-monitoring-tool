@@ -2,6 +2,7 @@
 // 흐름: 공개 통계(무료, 숫자) + AI 웹 검색(문장형 자료)을 함께 모아 → 요약 → 규칙 검사 → 본문 배치 → 최종 검사.
 // AI를 쓸 수 없을 때(이용 한도 소진 등)에도 공개 통계만으로 보고서를 만든다.
 import { ConfigError } from "@/lib/config";
+import { admit, clientIp } from "@/lib/rate-limit";
 import { composeReport } from "@/lib/report/compose";
 import { candidateNames, fetchOpenData, lookupCountry } from "@/lib/report/opendata";
 import { OpenAIError } from "@/lib/report/openai";
@@ -12,8 +13,13 @@ import { SummarizeError, summarizeSources } from "@/lib/report/summarize";
 import type { RawSource, StreamChunk, SummaryPiece } from "@/lib/report/types";
 import { verifyReport } from "@/lib/report/verify";
 
-// 최대 실행 시간(초). AI 호출은 각각 40초 안에 끝나도록 했다. 배포 환경(작업 17)에서 한계를 확인해 다시 정한다.
+// 최대 실행 시간(초). 함수가 이 시간에 강제 종료되면 결과가 통째로 사라지므로, 아래 시간 예산 안에 끝나도록 단계마다 제한한다.
 export const maxDuration = 60;
+
+// 시간 예산(밀리초): AI 검색·요약은 38초 안에 끝내지 못하면 멈추고 공개 통계만으로 계속한다.
+// 본문 배치는 전체 56초 안에서 남은 시간만큼만 기다린다(실패해도 보고서는 만든다).
+const AI_BUDGET_MS = 38_000;
+const TOTAL_BUDGET_MS = 56_000;
 
 const encoder = new TextEncoder();
 
@@ -66,9 +72,24 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // 어느 나라 이름도 아니면(오타 등) AI를 부르기 전에 돌려보낸다. 공개 주소에서 헛된 사용료가 나가지 않게 한다.
+  if (lookup.kind === "none") {
+    return Response.json(
+      { message: `"${country}"에 해당하는 국가를 찾지 못했습니다. 국가 이름을 확인해 다시 입력해 주세요.` },
+      { status: 400 },
+    );
+  }
+
+  // 같은 주소의 반복 요청과 동시 요청을 제한한다.
+  const admission = admit(clientIp(request));
+  if (!admission.ok) {
+    return Response.json({ message: admission.message }, { status: 429 });
+  }
+  const { release } = admission;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      const startedAt = Date.now();
       try {
         controller.enqueue(toLine({ type: "progress", step: "search" }));
 
@@ -80,11 +101,13 @@ export async function POST(request: Request) {
         let aiPieces: SummaryPiece[] = [];
         const notes: string[] = [];
         let aiFailure: KnownError | null = null;
+        // 사용자가 멈춘 경우(request.signal)와 시간 예산이 끝난 경우를 구분하기 위해 신호를 따로 둔다.
+        const aiSignal = AbortSignal.any([request.signal, AbortSignal.timeout(AI_BUDGET_MS)]);
         try {
-          const result = await searchSources(country, { signal: request.signal });
+          const result = await searchSources(country, { signal: aiSignal });
           if (request.signal.aborted) return;
           controller.enqueue(toLine({ type: "progress", step: "summarize" }));
-          const summary = await summarizeSources(country, result.sources, { signal: request.signal });
+          const summary = await summarizeSources(country, result.sources, { signal: aiSignal });
 
           const { pieces, removed } = applyRules(summary.pieces, result.sources);
           aiSources = result.sources;
@@ -97,8 +120,8 @@ export async function POST(request: Request) {
           }
         } catch (error) {
           if (request.signal.aborted) return;
-          if (!isKnownError(error)) throw error;
-          aiFailure = error;
+          // 시간 초과·네트워크 오류처럼 알려지지 않은 오류도 AI를 못 쓴 것으로 보고 공개 통계로 계속한다. (종류만 기록)
+          aiFailure = isKnownError(error) ? error : new SearchError(`AI 단계 오류: ${(error as Error)?.name ?? "알 수 없음"}`);
         }
 
         const open = await openPromise;
@@ -125,7 +148,8 @@ export async function POST(request: Request) {
         // ⑤ 본문 작성: 문장을 표준 목차 6개 항목과 하위 항목에 배치하고 분량을 맞춘다.
         if (request.signal.aborted) return;
         controller.enqueue(toLine({ type: "progress", step: "compose" }));
-        const composed = await composeReport({ country, sources, pieces, notes, signal: request.signal });
+        const remainingMs = Math.max(1_000, TOTAL_BUDGET_MS - (Date.now() - startedAt));
+        const composed = await composeReport({ country, sources, pieces, notes, signal: request.signal, budgetMs: remainingMs });
 
         // ⑥ 최종 검사: 목차·출처·금지 문구·분량을 확인하고, 담당자가 알아야 할 점을 경고에 더한다.
         controller.enqueue(toLine({ type: "progress", step: "verify" }));
@@ -140,6 +164,7 @@ export async function POST(request: Request) {
           toLine({ type: "error", message: isKnownError(error) ? error.userMessage : GENERIC_ERROR }),
         );
       } finally {
+        release();
         try {
           controller.close();
         } catch {

@@ -80,6 +80,7 @@ export function normalizeAssignment(
 async function assignSubsections(
   pieces: SummaryPiece[],
   signal: AbortSignal | undefined,
+  timeoutMs: number,
 ): Promise<number[]> {
   const topics = [...new Set(pieces.map((piece) => piece.topic))].sort();
   const input = JSON.stringify({
@@ -101,7 +102,7 @@ async function assignSubsections(
       },
       max_output_tokens: 2000,
     },
-    { signal, timeoutMs: CALL_TIMEOUT_MS },
+    { signal, timeoutMs },
   );
 
   const parsed = responseSchema.parse(await response.json());
@@ -218,6 +219,8 @@ export async function composeReport(input: {
   pieces: SummaryPiece[];
   notes: string[];
   signal?: AbortSignal;
+  // 이 단계에 쓸 수 있는 남은 시간. 전체 실행 제한(60초)을 넘기지 않게 모델 호출 제한을 줄이는 데 쓴다.
+  budgetMs?: number;
 }): Promise<Report> {
   const notes = [...input.notes];
 
@@ -233,6 +236,7 @@ export async function composeReport(input: {
       const assigned = await assignSubsections(
         needAi.map((index) => input.pieces[index]),
         input.signal,
+        Math.min(CALL_TIMEOUT_MS, input.budgetMs ?? CALL_TIMEOUT_MS),
       );
       needAi.forEach((index, order) => {
         assignment[index] = assigned[order];
