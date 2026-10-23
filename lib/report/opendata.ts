@@ -376,7 +376,15 @@ export async function fetchOpenData(
     for (const draft of imfDraft) pieces.push({ sourceId: sources.length, ...draft });
   }
 
-  const missing = [population, gdp, perCapita, growth, fdi, inflation, imfGrowth, imfInflation].filter((r) => r.status === "rejected").length;
-  const notes = missing > 0 ? [`공개 통계 지표 ${missing}개를 불러오지 못해 빠졌습니다.`] : [];
+  const names = ["인구", "GDP", "1인당 GDP", "성장률", "FDI", "물가", "IMF 성장률", "IMF 물가"];
+  [population, gdp, perCapita, growth, fdi, inflation, imfGrowth, imfInflation].forEach((result, index) => {
+    // 실패 이유(HTTP 번호나 오류 종류)만 서버 기록에 남긴다. 키나 응답 내용은 남기지 않는다.
+    if (result.status === "rejected") console.error(`공개 통계 호출 실패 (${names[index]}):`, (result.reason as Error)?.message ?? (result.reason as Error)?.name);
+  });
+  const failed = [population, gdp, perCapita, growth, fdi, inflation, imfGrowth, imfInflation]
+    .map((result, index) => (result.status === "rejected" ? names[index] : null))
+    .filter((name): name is string => name !== null);
+  // 어떤 지표가 빠졌는지 이름으로 알린다. (공개 주소에서는 IMF 서버가 접속을 거부해 IMF 전망 2개가 빠진다. AI 검색 결과가 일부 대신한다)
+  const notes = failed.length > 0 ? [`공개 통계 지표 ${failed.length}개(${failed.join(", ")})를 불러오지 못해 빠졌습니다.`] : [];
   return { status: "ok", sources, pieces, notes };
 }
