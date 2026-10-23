@@ -25,6 +25,7 @@ export default function Home() {
   // 내려받은 시점의 보고서. 이후 고치면 다른 객체가 되어 "아직 안 받음"으로 돌아간다.
   const [downloadedReport, setDownloadedReport] = useState<Report | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   // 화면을 떠나면 진행 중인 요청을 멈춘다.
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -41,6 +42,12 @@ export default function Home() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [unsaved]);
+
+  // 첫 화면이 화면 전체 높이라서, 만들기 시작·실패·완료 때 진행·결과 영역으로 부드럽게 내려간다.
+  useEffect(() => {
+    if (view.kind === "idle") return;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [view.kind]);
 
   async function handleSubmit(country: string) {
     // 내려받지 않은 보고서가 있는데 새로 만들면 지금 것이 사라지므로 먼저 확인한다.
@@ -83,61 +90,46 @@ export default function Home() {
   }
 
   return (
-    <div className="relative flex flex-1 flex-col">
-      <StageBackground />
+    <div className="flex flex-1 flex-col bg-black">
+      {/* 첫 화면: 영상 위에 가운데 정렬된 큰 제목, 설명, 국가 입력 */}
+      <main className="hero">
+        <StageBackground />
+        <div className="hero-scrim" aria-hidden />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 pb-16 sm:px-10">
-        {/* 머리글: 안쪽을 향한 화살표 로고와 이름 */}
-        <header className="in-fade flex items-center gap-4 py-7" style={{ ["--d" as string]: "0s" }}>
-          <svg aria-hidden width="40" height="40" viewBox="0 0 46 46" fill="none" stroke="#fff" strokeWidth="3">
-            {[0, 90, 180, 270].map((angle) => (
-              <g key={angle} transform={`rotate(${angle} 23 23)`}>
-                <path d="M23 0V19.5" />
-                <path d="M14 10.2L23 19.2L32 10.2" />
-              </g>
-            ))}
-          </svg>
-          <span className="font-jb text-sm tracking-tight text-[var(--sub)]">재정경제부 대외경제국 · 내부 보고용</span>
+        <header className="absolute inset-x-0 top-0 z-10 flex h-16 items-center justify-between px-6 sm:px-10">
+          <span className="e-lift text-[1.35rem] font-extrabold leading-none tracking-tight" style={{ ["--d" as string]: "0.46s" }}>
+            경제협력 보고
+          </span>
+          <span
+            className="glass-pill e-pill rounded-full px-4 py-1.5 text-[0.8rem] font-medium text-[#d9d9d9]"
+            style={{ ["--d" as string]: "0.68s" }}
+          >
+            재정경제부 내부 보고용
+          </span>
         </header>
 
-        {/* 첫 화면: 큰 제목, 설명, 국가 입력, 통계 줄 */}
-        <section aria-label="국가 입력" className="flex max-w-xl flex-col gap-6 pt-10 sm:pt-20">
-          <h1 className="text-[2.6rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[4.3rem]">
-            <span className="in-line" style={{ ["--d" as string]: "0.34s" }}>
+        <section aria-label="국가 입력" className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-5 pb-10 pt-20 text-center">
+          <h1 className="m-0 break-keep text-[clamp(2.7rem,8.4vw,5.6rem)] font-medium leading-[1.04] tracking-[-0.02em]">
+            <span className="e-line" style={{ ["--d" as string]: "0.12s" }}>
               <span>경제협력</span>
             </span>
-            <span className="in-line" style={{ ["--d" as string]: "0.43s" }}>
+            <span className="e-line" style={{ ["--d" as string]: "0.22s" }}>
               <span>모니터링 보고 도구</span>
             </span>
           </h1>
-          <p className="in-rise font-jb text-[1.02rem] leading-7 tracking-[-0.03em] text-[var(--sub)]" style={{ ["--d" as string]: "0.74s" }}>
+          <p className="e-sub mt-5 max-w-[34rem] break-keep text-[clamp(0.98rem,2.4vw,1.1rem)] font-light leading-[1.7] text-[#f6f6f6]" style={{ ["--d" as string]: "0.58s" }}>
             국가를 입력하면 공개 자료를 조사·요약해
-            <br />
-            표준 양식의 보고서를 만들어 줍니다.
+            <br className="hidden sm:block" /> 표준 양식의 보고서를 만들어 줍니다.
           </p>
-          <div className="in-rise" style={{ ["--d" as string]: "0.9s" }}>
+          <div className="e-pill mt-7 w-full max-w-[34rem]" style={{ ["--d" as string]: "0.9s" }}>
             <CountryForm onSubmit={handleSubmit} disabled={view.kind === "running"} />
           </div>
-
-          <dl className="in-rise mt-6 flex items-stretch gap-6 sm:gap-8" style={{ ["--d" as string]: "1.04s" }}>
-            {[
-              ["6", "표준 목차 항목"],
-              ["2–3", "A4 분량(쪽)"],
-              ["12", "과거 자료 기준(개월)"],
-            ].map(([number, label], index) => (
-              <div key={label} className="flex items-stretch gap-6 sm:gap-8">
-                {index > 0 && <span className="rule-v" aria-hidden />}
-                <div className="flex flex-col gap-1">
-                  <dt className="font-jb text-3xl font-medium text-white">{number}</dt>
-                  <dd className="font-[family-name:var(--font-sg)] text-sm tracking-[-0.02em] text-[var(--lab)]">{label}</dd>
-                </div>
-              </div>
-            ))}
-          </dl>
         </section>
+      </main>
 
-        {/* 진행·오류·결과는 첫 화면 아래에 이어서 보여 준다 */}
-        <div className="mt-14 flex flex-col gap-8">
+      {/* 진행·오류·결과는 첫 화면 아래에 이어서 보여 준다 (새 소식이 생기면 자동으로 이 위치로 내려간다) */}
+      <div ref={resultsRef} className="relative z-10 mx-auto w-full max-w-3xl scroll-mt-4 px-5 pb-20 sm:px-8">
+        <div className="flex flex-col gap-8 pt-6">
           {view.kind === "running" && (
             <ProgressView country={view.country} current={view.current} onCancel={handleCancel} />
           )}
@@ -145,7 +137,7 @@ export default function Home() {
         {view.kind === "error" && (
           <section
             role="alert"
-            className="flex flex-col gap-3 rounded-none border border-red-300 bg-red-50 p-5 text-sm text-red-900 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100"
+            className="flex flex-col gap-3 rounded-2xl border border-red-300 bg-red-50 p-5 text-sm text-red-900 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100"
           >
             <p>{view.message}</p>
             {view.suggestions.length > 0 ? (
@@ -156,7 +148,7 @@ export default function Home() {
                     key={name}
                     type="button"
                     onClick={() => handleSubmit(name)}
-                    className="rounded-none bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+                    className="rounded-full bg-brand px-3 py-1.5 font-medium text-[#050505] hover:bg-brand-dark"
                   >
                     {name}
                   </button>
@@ -166,7 +158,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => handleSubmit(view.country)}
-                className="self-start rounded-none bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+                className="self-start rounded-full bg-brand px-3 py-1.5 font-medium text-[#050505] hover:bg-brand-dark"
               >
                 {view.country} 다시 시도
               </button>
