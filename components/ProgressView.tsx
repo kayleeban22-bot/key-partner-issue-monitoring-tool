@@ -34,7 +34,7 @@ export default function ProgressView({ country, current, onCancel }: Props) {
     <section
       aria-label="생성 진행 상황"
       role="status"
-      className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5 text-sm dark:border-white/15 dark:bg-zinc-900"
+      className="flex flex-col gap-3 rounded-none border border-black/10 bg-white p-5 text-sm dark:border-white/20 dark:bg-black/80"
     >
       <p className="font-medium">
         {country} 보고서를 만들고 있습니다 <span className="font-normal text-zinc-500 dark:text-zinc-400">({seconds}초 경과)</span>
@@ -72,7 +72,7 @@ export default function ProgressView({ country, current, onCancel }: Props) {
       <button
         type="button"
         onClick={onCancel}
-        className="self-start rounded-md border border-black/15 px-3 py-1.5 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        className="self-start rounded-none border border-black/15 px-3 py-1.5 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
       >
         취소
       </button>

@@ -35,7 +35,7 @@ export default function CountryForm({ onSubmit, disabled = false }: Props) {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
-      <label htmlFor={inputId} className="text-sm font-medium">
+      <label htmlFor={inputId} className="font-jb text-sm text-[var(--lab)]">
         국가명
       </label>
       <input
@@ -51,15 +51,15 @@ export default function CountryForm({ onSubmit, disabled = false }: Props) {
         aria-invalid={error ? true : undefined}
         aria-describedby={messageId}
         disabled={disabled}
-        className="h-12 w-full rounded-lg border border-black/20 bg-transparent px-4 text-base outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
+        className="h-[52px] w-full rounded-none border border-white/30 bg-black/50 px-4 text-base text-white outline-none placeholder:text-white/40 focus:border-white"
       />
       <p
         id={messageId}
         role={error ? "alert" : undefined}
         className={
           error
-            ? "text-sm text-red-600 dark:text-red-400"
-            : "text-sm text-zinc-600 dark:text-zinc-400"
+            ? "text-sm text-red-400"
+            : "font-jb text-[0.8rem] text-[var(--lab)]"
         }
       >
         {error ?? "공개 자료만 사용합니다. 비공개 정보는 입력하지 마세요."}
@@ -67,9 +67,13 @@ export default function CountryForm({ onSubmit, disabled = false }: Props) {
       <button
         type="submit"
         disabled={disabled}
-        className="h-12 self-end rounded-lg bg-foreground px-6 text-base font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-50"
+        className="btn-red h-[52px] w-full max-w-[212px] self-start px-[18px] text-[1.1rem] sm:self-start"
       >
-        보고서 생성
+        <span>보고서 생성</span>
+        <svg className="btn-arrow" width="21" height="18" viewBox="0 0 21 18" fill="none" stroke="#fff" strokeWidth="2" aria-hidden>
+          <path d="M0 9H20.1" />
+          <path d="M12.1 1L20.1 9L12.1 17" />
+        </svg>
       </button>
     </form>
   );

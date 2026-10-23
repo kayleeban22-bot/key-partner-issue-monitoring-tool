@@ -12,7 +12,7 @@ import type { Report, Section, Source } from "@/lib/report/types";
 
 // 안내 상자의 공통 모양. 담당자에게만 보이고, 내려받는 보고서 파일에는 들어가지 않는다.
 const NOTICE_BOX =
-  "flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100";
+  "flex flex-col gap-2 rounded-none border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100";
 
 // 본문 문장 끝의 [1] 같은 번호. 누르면 아래 출처 목록의 해당 줄로 이동한다.
 function Citations({ ids }: { ids: number[] }) {
@@ -57,7 +57,7 @@ function SectionView({
           onClick={onEdit}
           disabled={editDisabled}
           title={editDisabled ? "다른 항목을 수정하는 중입니다. 저장하거나 취소한 뒤 수정해 주세요." : undefined}
-          className="shrink-0 rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
+          className="shrink-0 rounded-none border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
         >
           수정
         </button>
@@ -193,7 +193,7 @@ export default function ReportView({ report, onChange, downloaded, onDownloaded 
   return (
     <article
       aria-label="생성된 보고서"
-      className="flex flex-col gap-8 rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-zinc-900 sm:p-8"
+      className="flex flex-col gap-8 rounded-none border border-black/10 bg-white p-5 dark:border-white/20 dark:bg-black/80 sm:p-8"
     >
       <div className="flex flex-col gap-1">
         <h2 className="text-2xl font-bold tracking-tight">{report.title}</h2>
@@ -221,7 +221,7 @@ export default function ReportView({ report, onChange, downloaded, onDownloaded 
           />
         ),
       )}
-      <hr className="border-black/10 dark:border-white/15" />
+      <hr className="border-black/10 dark:border-white/20" />
       <SourceList sources={report.sources} />
       <DownloadPanel report={report} downloaded={downloaded} onDownloaded={onDownloaded} />
     </article>

@@ -10,9 +10,9 @@ import { findForbiddenInText } from "@/lib/report/phrases";
 import type { Section } from "@/lib/report/types";
 
 const BUTTON =
-  "rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10";
+  "rounded-none border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10";
 const PRIMARY_BUTTON =
-  "rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-85";
+  "rounded-none bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark";
 
 // 글자 수에 맞춰 높이가 늘어나는 글 상자
 function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -50,7 +50,7 @@ export default function SectionEditor({ section, onSave, onCancel }: Props) {
     }));
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-4 rounded-lg border border-blue-300 bg-blue-50/40 p-4 dark:border-blue-700/60 dark:bg-blue-950/20">
+    <section aria-labelledby={headingId} className="flex flex-col gap-4 rounded-none border border-blue-300 bg-blue-50/40 p-4 dark:border-blue-700/60 dark:bg-blue-950/20">
       <h3 id={headingId} className="text-lg font-semibold">
         {section.no}. {section.title} <span className="text-sm font-normal text-blue-700 dark:text-blue-300">(수정 중)</span>
       </h3>
@@ -79,7 +79,7 @@ export default function SectionEditor({ section, onSave, onCancel }: Props) {
                       list.map((item) => (item.key === sentence.key ? { ...item, text: event.target.value } : item)),
                     )
                   }
-                  className="w-full resize-none overflow-hidden rounded-md border border-black/20 bg-white px-3 py-2 leading-7 outline-none focus:border-black dark:border-white/25 dark:bg-zinc-900 dark:focus:border-white"
+                  className="w-full resize-none overflow-hidden rounded-none border border-black/20 bg-white px-3 py-2 leading-7 outline-none focus:border-black dark:border-white/25 dark:bg-black/80 dark:focus:border-white"
                 />
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   {sentence.sourceIds.length === 0 ? (
