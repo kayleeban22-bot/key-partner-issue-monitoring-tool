@@ -1,6 +1,8 @@
 // Design Ref: §3.4 — 수정이 끝난 보고서를 받아 파일(.docx)로 만들어 돌려준다. 서버에는 저장하지 않는다.
 import { buildDocx } from "@/lib/export/docx";
 import { reportFileName } from "@/lib/export/shared";
+import { allowExport, clientIp } from "@/lib/rate-limit";
+import { guardJsonRequest } from "@/lib/request-guard";
 import { reportSchema } from "@/lib/report/schema";
 import { z } from "zod";
 
@@ -11,7 +13,16 @@ const requestSchema = z.object({
 
 const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+// 보고서 한 건은 수십 KB이다. 이보다 큰 요청은 거절한다.
+const MAX_BODY_BYTES = 512 * 1024;
+
 export async function POST(request: Request) {
+  const rejected = guardJsonRequest(request, MAX_BODY_BYTES);
+  if (rejected) return rejected;
+  if (!allowExport(clientIp(request))) {
+    return Response.json({ message: "짧은 시간에 너무 많이 요청했습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
+  }
+
   let body: unknown;
   try {
     body = await request.json();

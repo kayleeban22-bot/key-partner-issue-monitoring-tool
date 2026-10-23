@@ -3,6 +3,7 @@
 // AI를 쓸 수 없을 때(이용 한도 소진 등)에도 공개 통계만으로 보고서를 만든다.
 import { ConfigError } from "@/lib/config";
 import { admit, clientIp } from "@/lib/rate-limit";
+import { guardJsonRequest } from "@/lib/request-guard";
 import { composeReport } from "@/lib/report/compose";
 import { candidateNames, fetchOpenData, lookupCountry } from "@/lib/report/opendata";
 import { OpenAIError } from "@/lib/report/openai";
@@ -46,6 +47,9 @@ function failureReason(error: KnownError): string {
 }
 
 export async function POST(request: Request) {
+  const rejected = guardJsonRequest(request, 2_000);
+  if (rejected) return rejected;
+
   let body: unknown;
   try {
     body = await request.json();
